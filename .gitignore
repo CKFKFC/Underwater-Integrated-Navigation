@@ -1,0 +1,17 @@
+# MATLAB generated and temporary files
+*.asv
+*.m~
+*.autosave
+*.fig
+*.mex*
+slprj/
+codegen/
+
+# Simulation data and generated results
+*.mat
+
+# Editor and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
