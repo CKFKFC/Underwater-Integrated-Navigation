@@ -10,6 +10,9 @@ function results = ESKF(cfg, meas, results)
 
 %% 初始化
 algorithmName = "ESKF";
+
+% stateModel 是本次运行的状态模型唯一来源。ESKF 主流程不判断 9/15 维，
+% 只把导航状态交给模型构造矩阵，并把模型元数据随结果保存用于复现实验。
 stateModel = InertialErrorStateModel(cfg);
 time = meas.getTime();
 numSamples = meas.getNumSamples();
@@ -23,7 +26,7 @@ for mc = 1:cfg.sim.runs
     % 每次 MC 重新生成传感器噪声。
     meas.prepareMonteCarloRun(mc);
 
-    % 导航初值扰动和 P0 属于 ESKF 内部参数。
+    % 导航初值扰动、P0 和滤波器维数均来自同一个状态布局，避免三者错位。
     [navSol, imuBias, initialP] = stateModel.CreateInitialNavigation(meas);
     fil = ErrorStateKF(stateModel, initialP);
 

@@ -31,6 +31,8 @@
                 stateModelMetadata = struct();
             end
 
+            % 状态模型说明与导航数组保存在同一算法结果下，但不参与误差计算。
+            % 即使未来不同算法使用不同维数，也能从各自结果中恢复其状态定义。
             name = char(algorithmName);
             result = struct();
             result.StateModel = stateModelMetadata;

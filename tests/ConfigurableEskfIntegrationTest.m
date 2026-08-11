@@ -47,6 +47,7 @@ classdef ConfigurableEskfIntegrationTest < matlab.unittest.TestCase
 
     methods (Static, Access = private)
         function result = runShortIntegration(profileName)
+            % 固定输入、仿真时长和随机种子，使 9/15 维测试可重复比较。
             projectRoot = fileparts(fileparts(mfilename("fullpath")));
             cfg = setConfig();
             cfg.algorithm.stateModel.profile = profileName;
@@ -68,6 +69,7 @@ classdef ConfigurableEskfIntegrationTest < matlab.unittest.TestCase
         end
 
         function expected = legacySnapshot()
+            % 重构前 15 维实现的检查点快照，用于防止架构调整改变数值结果。
             expected = [
                 0.57089737512141892, 2.0682151243785505, -49.863409680000224, 2.2532057113413635, 2.3723023291524266, -0.43361386388403322, -0.022285749244323649, 0.12663081990140843, 0.80451339804098476, 0, 0, 0, 0, 0, 0
                 0.57089756457788399, 2.0682153356959656, -50.094431467136694, 2.2205127611186986, 2.4168507424977297, -0.45741417769533715, -0.01734954807455957, 0.12539151860156911, 0.81742555074551426, -6.7061092776486134e-11, -8.5315015587438488e-11, -1.1365699512249775e-10, -1.2973605688029933e-06, 1.2755900931653176e-06, -1.6991429845125155e-07
