@@ -12,6 +12,7 @@
     end
 
     methods
+        %% 构造结果管理器
         function obj = FilterResults(cfg, meas)
             %FILTERRESULTS 构造结果管理器。
             arguments
@@ -25,6 +26,7 @@
             obj.Error = struct();
         end
 
+        %% 注册算法并预分配结果数组
         function registerAlgorithm(obj, algorithmName, runs, numSamples, stateModelMetadata)
             %REGISTERALGORITHM 为算法结果预分配数组。
             if nargin < 5
@@ -44,6 +46,7 @@
             obj.Data.(name) = result;
         end
 
+        %% 保存单个时刻的导航结果
         function storeNavigation(obj, algorithmName, mc, sampleIndex, navSol, imuBias)
             %STORENAVIGATION 保存一个导航解算结果。
             if nargin < 6
@@ -60,6 +63,7 @@
             obj.Data.(name).AccelBias(sampleIndex, :, mc) = imuBias.AccelBias(:).';
         end
 
+        %% 计算各算法的导航误差和 RMSE
         function computeErrors(obj, meas)
             %COMPUTEERRORS 在有真值时计算 ENU 误差和 RMSE。
             if ~meas.hasTruth()
@@ -111,6 +115,7 @@
             end
         end
 
+        %% 将结果、误差和配置保存到 MAT 文件
         function saveToMat(obj)
             %SAVETOMAT 保存结果和误差到 data/output。
             outputFolder = obj.Cfg.result.outputFolder;
@@ -127,12 +132,14 @@
     end
 
     methods (Access = private)
+        %% 计算估计姿态相对真值的失准角
         function attitudeError = computeAttitudeMisalignment(~, estimateCbn, truthCbn)
             %COMPUTEATTITUDEMISALIGNMENT 计算估计姿态相对真值姿态的小失准角。
             relativeDcm = estimateCbn * truthCbn.';
             attitudeError = FilterResults.rotationVectorFromDcm(relativeDcm);
         end
 
+        %% 沿 Monte Carlo 维度计算分量 RMSE
         function componentRmse = computeComponentRmse(~, errorData)
             %COMPUTECOMPONENTRMSE 沿 MC 维度计算每个分量的 RMSE。
             componentRmse = sqrt(mean(errorData.^2, 3, "omitnan"));
@@ -140,6 +147,7 @@
     end
 
     methods (Static, Access = private)
+        %% 从方向余弦矩阵提取旋转矢量
         function rotationVector = rotationVectorFromDcm(rotationMatrix)
             %ROTATIONVECTORFROMDCM 从旋转矩阵提取旋转矢量。
             traceArgument = 0.5 * (trace(rotationMatrix) - 1.0);

@@ -13,6 +13,7 @@ classdef InertialErrorStateModel
     end
 
     methods
+        %% 构造可配置状态模型
         function obj = InertialErrorStateModel(cfg)
             arguments
                 cfg struct
@@ -26,6 +27,7 @@ classdef InertialErrorStateModel
             obj.InitialErrorStd = vertcat(obj.Blocks.InitialStd);
         end
 
+        %% 生成一次 Monte Carlo 的导航初值和初始协方差
         function [navSol, imuBias, covariance] = CreateInitialNavigation(obj, meas)
             %CREATEINITIALNAVIGATION 生成一次 Monte Carlo 的导航初值和 P0。
             navSol = meas.getInitialNavigation();
@@ -50,6 +52,7 @@ classdef InertialErrorStateModel
             covariance = diag(obj.InitialErrorStd.^2);
         end
 
+        %% 构建连续时间惯导误差动力学
         function [F, G, Qc] = BuildErrorDynamics(obj, navSol, correctedImu)
             %BUILDERRORDYNAMICS 生成当前状态组合对应的连续误差模型。
             %   本工程误差定义为“真值相对当前导航解的修正量”。F 的行表示
@@ -117,6 +120,7 @@ classdef InertialErrorStateModel
             Qc = diag([gyroNoise.^2; accelNoise.^2]);
         end
 
+        %% 构建 DVL 速度量测模型
         function [residual, H, R] = BuildDvlMeasurement(obj, navSol, measurement)
             %BUILDDVLMEASUREMENT 生成体坐标系 DVL 速度量测模型。
             %   残差统一采用 z-h(x)。线性化 Cnb*v 后，姿态误差和 ENU 速度
@@ -131,6 +135,7 @@ classdef InertialErrorStateModel
             R = measurement.R;
         end
 
+        %% 构建深度量测模型
         function [residual, H, R] = BuildDepthMeasurement(obj, navSol, measurement)
             %BUILDDEPTHMEASUREMENT 生成深度量测模型。
             %   ENU 高度向上为正，而深度向下为正，因此高度误差对应的 H 元素为 -1。
@@ -143,6 +148,7 @@ classdef InertialErrorStateModel
             R = measurement.R;
         end
 
+        %% 构建 GPS 位置量测模型
         function [residual, H, R] = BuildGpsMeasurement(obj, navSol, measurement)
             %BUILDGPSMEASUREMENT 生成 GPS 位置量测模型。
             %   经纬高差先转换为米制 ENU 残差，使其与 Position 状态块定义一致。
@@ -153,6 +159,7 @@ classdef InertialErrorStateModel
             R = measurement.R;
         end
 
+        %% 将误差状态闭环反馈到名义导航状态
         function [navSol, imuBias] = FeedbackNavigation(obj, navSol, imuBias, errorState)
             %FEEDBACKNAVIGATION 按状态块语义反馈误差状态。
             %   反馈接口只接受与当前 Layout 等长的向量。统一转换为列向量，防止
@@ -187,11 +194,13 @@ classdef InertialErrorStateModel
             end
         end
 
+        %% 判断当前模型是否包含指定状态块
         function isPresent = HasState(obj, blockName)
             %HASSTATE 判断当前模型是否包含指定状态块。
             isPresent = isfield(obj.Layout.Has, char(blockName));
         end
 
+        %% 导出可随滤波结果保存的状态模型元数据
         function metadata = GetMetadata(obj)
             %GETMETADATA 返回可随结果保存的状态模型描述。
             %   元数据不参与滤波运算，用于复现实验时确认 profile、维数和索引。
@@ -205,6 +214,7 @@ classdef InertialErrorStateModel
     end
 
     methods (Static, Access = private)
+        %% 构建 ENU 误差方程所需的地球参数和雅可比
         function model = BuildEarthErrorModel(constants, latitude, altitude, velocityEnu)
             %BUILDEARTHERRORMODEL 汇总 ENU 误差方程需要的地球参数及雅可比。
             [RM, RN] = earthRadii(latitude);
@@ -270,6 +280,7 @@ classdef InertialErrorStateModel
                 dRMdLatitude, dRNdLatitude);
         end
 
+        %% 计算曲率半径对纬度的导数
         function [dRMdLatitude, dRNdLatitude] = EarthRadiiDerivatives(constants, latitude)
             %EARTHRADIIDERIVATIVES 计算子午圈和卯酉圈曲率半径对纬度的导数。
             sinLatitude = sin(latitude);
@@ -283,6 +294,7 @@ classdef InertialErrorStateModel
                 / denominator^(5.0 / 2.0);
         end
 
+        %% 构建重力对位置的雅可比
         function jacobian = BuildGravityPositionJacobian(constants, latitude, altitude)
             %BUILDGRAVITYPOSITIONJACOBIAN 计算重力对纬度和高度的局部敏感度。
             %   ENU 重力主要作用于天向，因此该雅可比只有第三行存在非零元素。
@@ -307,6 +319,7 @@ classdef InertialErrorStateModel
             jacobian(3, 3) = -dGravityDAltitude;
         end
 
+        %% 构建米制 ENU 位置误差雅可比
         function jacobian = BuildLocalPositionJacobian( ...
                 latitude, velocityEnu, meridianRadius, transverseRadius, ...
                 dRMdLatitude, dRNdLatitude)
@@ -358,6 +371,7 @@ classdef InertialErrorStateModel
                 + enuFromLlhJacobian * positionRateJacobian * llhFromEnuJacobian;
         end
 
+        %% 将标量或分轴标准差规范为列向量
         function stdVector = ExpandStd(stdValue, dimension)
             %EXPANDSTD 允许配置使用一个各轴相同的标量或完整的分轴标准差。
             stdVector = double(stdValue(:));

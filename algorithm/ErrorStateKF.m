@@ -13,6 +13,7 @@ classdef ErrorStateKF < handle
     end
 
     methods
+        %% 构造可变维误差状态滤波器
         function obj = ErrorStateKF(model, initialCovariance)
             arguments
                 model InertialErrorStateModel
@@ -35,6 +36,7 @@ classdef ErrorStateKF < handle
             obj.CurStep_ = 0;
         end
 
+        %% 准备进入新的滤波时刻
         function Preparation(obj, sampleIndex)
             %PREPARATION 保存上一个滤波时刻的误差状态与协方差。
             %   同一时刻的多个量测都更新 CurX_/CurP_；进入下一时刻前，再将其
@@ -44,6 +46,7 @@ classdef ErrorStateKF < handle
             obj.PreP_ = obj.CurP_;
         end
 
+        %% 执行误差状态预测
         function Predict(obj, navSol, correctedImu, dt)
             %PREDICT 递推误差状态，不递推名义导航解。
             [F, G, Qc] = obj.Model_.BuildErrorDynamics(navSol, correctedImu);
@@ -59,34 +62,40 @@ classdef ErrorStateKF < handle
             obj.CurP_ = ErrorStateKF.SymmetrizeCovariance(obj.CurP_);
         end
 
+        %% 执行 DVL 量测更新
         function UpdateDvl(obj, navSol, measurement)
             %UPDATEDVL 执行 DVL 速度量测更新。
             [residual, H, R] = obj.Model_.BuildDvlMeasurement(navSol, measurement);
             obj.KalmanUpdate(residual, H, R);
         end
 
+        %% 执行深度量测更新
         function UpdateDepth(obj, navSol, measurement)
             %UPDATEDEPTH 执行深度量测更新。
             [residual, H, R] = obj.Model_.BuildDepthMeasurement(navSol, measurement);
             obj.KalmanUpdate(residual, H, R);
         end
 
+        %% 执行 GPS 量测更新
         function UpdateGps(obj, navSol, measurement)
             %UPDATEGPS 执行 GPS 位置量测更新。
             [residual, H, R] = obj.Model_.BuildGpsMeasurement(navSol, measurement);
             obj.KalmanUpdate(residual, H, R);
         end
 
+        %% 获取当前误差状态
         function errorState = GetErrorState(obj)
             %GETERRORSTATE 返回当前误差状态估计。
             errorState = obj.CurX_;
         end
 
+        %% 获取当前协方差
         function covariance = GetCovariance(obj)
             %GETCOVARIANCE 返回当前误差状态协方差。
             covariance = obj.CurP_;
         end
 
+        %% 闭环反馈后清零误差状态
         function ResetErrorState(obj)
             %RESETERRORSTATE 闭环反馈后清零误差状态均值。
             %   协方差表示反馈后的剩余不确定度，不能随状态均值一起清零。
@@ -96,6 +105,7 @@ classdef ErrorStateKF < handle
     end
 
     methods (Static)
+        %% 执行零偏补偿后的惯导机械编排
         function [navSol, correctedImu] = PropagateNavigation(navSol, imuBias, imu, dt)
             %PROPAGATENAVIGATION 执行零偏补偿后的惯导机械编排。
             %   先用当前名义零偏补偿原始 IMU，再将补偿后的角速度和比力同时
@@ -112,6 +122,7 @@ classdef ErrorStateKF < handle
     end
 
     methods (Access = private)
+        %% 执行通用线性卡尔曼量测更新
         function KalmanUpdate(obj, residual, H, R)
             %KALMANUPDATE 对任意维量测执行一次线性误差状态更新。
             residual = residual(:);
@@ -133,6 +144,7 @@ classdef ErrorStateKF < handle
     end
 
     methods (Static, Access = private)
+        %% 消除协方差的浮点非对称误差
         function covariance = SymmetrizeCovariance(covariance)
             %SYMMETRIZECOVARIANCE 消除浮点矩阵运算导致的反对称舍入误差。
             covariance = 0.5 * (covariance + covariance.');
