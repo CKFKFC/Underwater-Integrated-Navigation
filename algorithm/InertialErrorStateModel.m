@@ -1,8 +1,6 @@
 classdef InertialErrorStateModel
     %INERTIALERRORSTATEMODEL 可配置惯导误差状态模型。
     %   该类是“状态语义层”：根据 profile 组合状态块，并集中生成动力学、
-    %   量测模型和闭环反馈。ErrorStateKF 只消费本类生成的矩阵，因此不需要
-    %   知道状态总维数，也不应出现与具体状态位置有关的硬编码索引。
 
     properties (SetAccess = private)
         Cfg                % 完整算法配置，供噪声模型和量测模型读取

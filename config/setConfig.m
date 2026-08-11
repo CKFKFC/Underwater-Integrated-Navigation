@@ -63,7 +63,7 @@ degreePerHourToRadianPerSecond = deg2rad(1.0) / secondsPerHour;
 degreePerSqrtHourToRadianPerSqrtSecond = deg2rad(1.0) / sqrt(secondsPerHour);
 
 % 常值零偏 1σ。每次 Monte Carlo 运行生成一次，整段轨迹内保持不变。
-cfg.noise.imu.accelBiasStdMicroG = [100.0; 100.0; 100.0];     % 加速度计零偏: micro-g
+cfg.noise.imu.accelBiasStdMicroG = [100.0; 100.0; 100.0];     % 加速度计零偏: ug
 cfg.noise.imu.gyroBiasStdDegPerHour = [1.0; 1.0; 1.0];        % 陀螺零偏: deg/h
 cfg.noise.imu.accelBiasStd = cfg.noise.imu.accelBiasStdMicroG ...
     * microGToMeterPerSecondSquared;                          % m/s^2
