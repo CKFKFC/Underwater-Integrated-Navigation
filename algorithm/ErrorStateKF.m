@@ -110,14 +110,20 @@ classdef ErrorStateKF < handle
             %PROPAGATENAVIGATION 执行零偏补偿后的惯导机械编排。
             %   先用当前名义零偏补偿原始 IMU，再将补偿后的角速度和比力同时
             %   提供给机械编排与误差状态动力学，保证两条传播链使用相同输入。
-            correctedImu = struct();
-            correctedImu.Time = imu.Time;
-            correctedImu.Gyro = imu.Gyro - imuBias.GyroBias;
-            correctedImu.Accel = imu.Accel - imuBias.AccelBias;
+            correctedImu = ErrorStateKF.CompensateImu(imuBias, imu);
 
             [navSol.Cbn, navSol.VelocityEnu, navSol.PositionLlh] = insUpdateENU( ...
                 navSol.Cbn, navSol.VelocityEnu, navSol.PositionLlh, ...
                 correctedImu.Gyro, correctedImu.Accel, dt);
+        end
+
+        %% 执行 IMU 名义零偏补偿
+        function correctedImu = CompensateImu(imuBias, imu)
+            %COMPENSATEIMU 使用当前名义零偏修正原始 IMU 量测。
+            correctedImu = struct();
+            correctedImu.Time = imu.Time;
+            correctedImu.Gyro = imu.Gyro - imuBias.GyroBias;
+            correctedImu.Accel = imu.Accel - imuBias.AccelBias;
         end
     end
 

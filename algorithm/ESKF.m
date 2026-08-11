@@ -16,6 +16,8 @@ algorithmName = "ESKF";
 stateModel = InertialErrorStateModel(cfg);
 time = meas.getTime();
 numSamples = meas.getNumSamples();
+isDelayEnabled = isfield(cfg, "sensorDelay") ...
+    && logical(cfg.sensorDelay.isEnabled);
 progressStepCount = max(1, round(1.0 / cfg.sim.dt));
 results.registerAlgorithm( ...
     algorithmName, cfg.sim.runs, numSamples, stateModel.GetMetadata());
@@ -29,6 +31,10 @@ for mc = 1:cfg.sim.runs
     % 导航初值扰动、P0 和滤波器维数均来自同一个状态布局，避免三者错位。
     [navSol, imuBias, initialP] = stateModel.CreateInitialNavigation(meas);
     fil = ErrorStateKF(stateModel, initialP);
+    laggedNavSol = navSol;
+    hasDelayedImu = false;
+    lastImuSampleTime = time(1);
+    lastFilterTime = time(1);
 
     positionHistory = nan(3, numSamples);
     velocityHistory = nan(3, numSamples);
@@ -47,44 +53,107 @@ for mc = 1:cfg.sim.runs
             fprintf("第%d/%d次MC，仿真运行到第%.2f秒\n", mc, cfg.sim.runs, time(sampleIndex));
         end
 
-        %% 准备当前滤波时刻
+        %% 计算当前主时间步长
         dt = time(sampleIndex) - time(sampleIndex - 1);
         if ~isfinite(dt) || dt <= 0.0
             dt = cfg.sim.dt;
         end
-        fil.Preparation(sampleIndex);
 
-        %% 惯导解算
-        % 惯导解算仍在滤波时间更新之外显式执行。
-        imu = meas.getImu(sampleIndex);
-        [navSol, correctedImu] = ErrorStateKF.PropagateNavigation(navSol, imuBias, imu, dt);
+        if isDelayEnabled
+            %% 延时 IMU 解算与一阶前向补偿
+            imu = meas.getImu(sampleIndex);
+            if ~imu.Valid
+                positionHistory(:, sampleIndex) = navSol.PositionLlh(:);
+                velocityHistory(:, sampleIndex) = navSol.VelocityEnu(:);
+                eulerHistory(:, sampleIndex) = eulerFromDcm(navSol.Cbn);
+                gyroBiasHistory(:, sampleIndex) = imuBias.GyroBias(:);
+                accelBiasHistory(:, sampleIndex) = imuBias.AccelBias(:);
+                continue;
+            end
 
-        %% 误差状态预测
-        % 时间更新只递推所选模型的误差状态和协方差。
-        fil.Predict(navSol, correctedImu, dt);
+            if hasDelayedImu
+                imuDt = imu.SampleTime - lastImuSampleTime;
+                if ~isfinite(imuDt) || imuDt <= 0.0
+                    imuDt = cfg.sim.dt;
+                end
+                [laggedNavSol, correctedImu] = ErrorStateKF.PropagateNavigation( ...
+                    laggedNavSol, imuBias, imu, imuDt);
+            else
+                correctedImu = ErrorStateKF.CompensateImu(imuBias, imu);
+                hasDelayedImu = true;
+            end
 
-        %% DVL 量测更新
-        dvl = meas.getDvl(sampleIndex);
-        if dvl.Valid
-            fil.UpdateDvl(navSol, dvl);
-        end
+            navSol = SensorDelayCompensator.forwardImu( ...
+                laggedNavSol, correctedImu, imu.DelaySeconds);
+            lastImuSampleTime = imu.SampleTime;
 
-        %% 深度量测更新
-        depth = meas.getDepth(sampleIndex);
-        if depth.Valid
-            fil.UpdateDepth(navSol, depth);
-        end
+            %% 将误差状态预测到导航计算机当前时刻
+            predictDt = time(sampleIndex) - lastFilterTime;
+            if ~isfinite(predictDt) || predictDt <= 0.0
+                predictDt = dt;
+            end
+            fil.Preparation(sampleIndex);
+            fil.Predict(navSol, correctedImu, predictDt);
+            lastFilterTime = time(sampleIndex);
 
-        %% GPS 量测更新
-        gps = meas.getGps(sampleIndex);
-        if gps.Valid
-            fil.UpdateGps(navSol, gps);
+            %% 使用各外部量测采样时刻的临时导航状态构造新息
+            dvl = meas.getDvl(sampleIndex);
+            if dvl.Valid
+                dvlNavSol = SensorDelayCompensator.backPropagateVelocity( ...
+                    navSol, correctedImu, dvl.DelaySeconds);
+                fil.UpdateDvl(dvlNavSol, dvl);
+            end
+
+            depth = meas.getDepth(sampleIndex);
+            if depth.Valid
+                depthNavSol = SensorDelayCompensator.backPropagateHeight( ...
+                    navSol, depth.DelaySeconds);
+                fil.UpdateDepth(depthNavSol, depth);
+            end
+
+            gps = meas.getGps(sampleIndex);
+            if gps.Valid
+                gpsNavSol = SensorDelayCompensator.backPropagateNavigation( ...
+                    navSol, correctedImu, gps.DelaySeconds);
+                fil.UpdateGps(gpsNavSol, gps);
+            end
+        else
+            %% 无延时惯导解算与误差状态预测
+            fil.Preparation(sampleIndex);
+            imu = meas.getImu(sampleIndex);
+            [navSol, correctedImu] = ErrorStateKF.PropagateNavigation( ...
+                navSol, imuBias, imu, dt);
+            fil.Predict(navSol, correctedImu, dt);
+
+            %% 无延时外部量测更新
+            dvl = meas.getDvl(sampleIndex);
+            if dvl.Valid
+                fil.UpdateDvl(navSol, dvl);
+            end
+
+            depth = meas.getDepth(sampleIndex);
+            if depth.Valid
+                fil.UpdateDepth(navSol, depth);
+            end
+
+            gps = meas.getGps(sampleIndex);
+            if gps.Valid
+                fil.UpdateGps(navSol, gps);
+            end
         end
 
         %% 闭环反馈
         % 将估计误差注入导航解算结果。
         errorState = fil.GetErrorState();
+        imuBiasBeforeFeedback = imuBias;
         [navSol, imuBias] = stateModel.FeedbackNavigation(navSol, imuBias, errorState);
+
+        if isDelayEnabled
+            % 延时时间仅为 30 ms，将同一个导航误差修正量注入滞后状态，保证
+            % 下一帧完整机械编排不会丢失当前量测反馈。零偏只在当前状态反馈一次。
+            [laggedNavSol, ~] = stateModel.FeedbackNavigation( ...
+                laggedNavSol, imuBiasBeforeFeedback, errorState);
+        end
 
         % 反馈后必须清零误差状态，避免下一步重复补偿。
         fil.ResetErrorState();

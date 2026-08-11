@@ -50,6 +50,15 @@ cfg.sensor.gps.isEnabled = false;
 cfg.sensor.dvl.availableTime = [0.0, inf];
 cfg.sensor.gps.availableTime = [0.0, inf];
 
+%% 传感器总线延时
+% 关闭时所有传感器在采样时刻立即可用；开启时，延时步数乘以主采样周期
+% cfg.sim.dt 得到实际传输延时。第一版采用固定延时：IMU 30 ms，其余 20 ms。
+cfg.sensorDelay.isEnabled = false;
+cfg.sensorDelay.imu.delaySteps = 3;
+cfg.sensorDelay.dvl.delaySteps = 2;
+cfg.sensorDelay.depth.delaySteps = 2;
+cfg.sensorDelay.gps.delaySteps = 2;
+
 % 异步量测时间匹配容差。
 cfg.measurement.timeTolerance = 0.5 * cfg.sim.dt;
 
@@ -97,7 +106,7 @@ cfg.algorithm.isESKFOn = true;
 % 误差状态模型配置。只需切换 profile 即可选择状态组合：
 % ins9  = 姿态误差 + 速度误差 + 位置误差；
 % ins15 = ins9 + 陀螺零偏误差 + 加速度计零偏误差。
-cfg.algorithm.stateModel.profile = "ins15";
+cfg.algorithm.stateModel.profile = "ins9";
 
 % 初始误差标准差用于每次 MC 的导航初值扰动和滤波初始协方差 P0。
 % 状态顺序由所选 profile 中的状态块顺序统一生成。

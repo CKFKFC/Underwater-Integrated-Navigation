@@ -1,5 +1,5 @@
 function [profileName, blocks] = createInertialStateProfile(cfg)
-%CREATEINERTIALSTATEPROFILE 根据配置组合惯导误差状态块。
+%CREATEINERTIALSTATEPROFILE 按配置组合惯导误差状态块。
 %   Profile 是切换状态模型的唯一入口，只负责声明“包含哪些块及其顺序”。
 %   每个块的数学耦合由 InertialErrorStateModel 负责，滤波数值核心无需修改。
 

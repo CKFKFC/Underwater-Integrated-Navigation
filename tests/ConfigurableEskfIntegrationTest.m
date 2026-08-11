@@ -57,6 +57,7 @@ classdef ConfigurableEskfIntegrationTest < matlab.unittest.TestCase
             cfg.sensor.dvl.isEnabled = true;
             cfg.sensor.depth.isEnabled = false;
             cfg.sensor.gps.isEnabled = false;
+            cfg.sensorDelay.isEnabled = false;
             cfg.result.outputFolder = fullfile(projectRoot, "data", "output");
 
             rng(20260811, "twister");

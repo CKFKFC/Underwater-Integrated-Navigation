@@ -1,5 +1,5 @@
 function layout = buildStateLayout(blocks)
-%BUILDSTATELAYOUT 为有序状态块分配连续且唯一的全局索引。
+%BUILDSTATELAYOUT 根据有序状态块分配连续且唯一的全局索引。
 %   blocks 的排列顺序就是最终误差状态向量的唯一顺序。返回的 Index 允许
 %   其他模块按状态名称访问索引，避免传播硬编码的数字区间。
 

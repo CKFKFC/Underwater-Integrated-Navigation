@@ -1,5 +1,5 @@
 classdef InertialErrorStateModel
-    %INERTIALERRORSTATEMODEL 可配置惯导误差状态模型。
+    %INERTIALERRORSTATEMODEL 可配置惯导误差状态语义与动力学模型。
     %   该类是“状态语义层”：根据 profile 组合状态块，并集中生成动力学、
 
     properties (SetAccess = private)

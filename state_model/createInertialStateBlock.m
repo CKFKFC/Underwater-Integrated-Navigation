@@ -1,5 +1,5 @@
 function block = createInertialStateBlock(cfg, blockName)
-%CREATEINERTIALSTATEBLOCK 创建一个惯导误差状态块定义。
+%CREATEINERTIALSTATEBLOCK 构造一个惯导误差状态块定义。
 %   状态块只描述状态的语义、维数、单位和初始标准差，不负责分配全局索引。
 %   所有标准差在配置层已经转换为 SI 单位，可直接用于随机初始误差和 P0。
 

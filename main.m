@@ -10,7 +10,7 @@ clc;
 addpath(genpath(pwd));
 
 % 控制随机数，便于复现实验。
-randomselect = 'repeatlast'; % 'random' or 'repeatlast'
+randomselect = 'random'; % 'random' or 'repeatlast'
 ControlRandomNumber(randomselect);
 
 % 读取全局配置。仿真时长可在 cfg.sim.duration 中设置。

@@ -68,11 +68,22 @@ cfg.algorithm.stateModel.profile = "ins9";  % 9维：姿态、速度、位置误
 cfg.algorithm.stateModel.profile = "ins15"; % 15维：ins9 + 陀螺/加速度计零偏
 ```
 
+IMU 常值零偏是否注入直接由 profile 的状态块决定：包含 `GyroBias` 时注入
+陀螺零偏，包含 `AccelBias` 时注入加速度计零偏。新增 profile 只需定义状态块，
+无需增加与维数名称绑定的零偏开关。
+
 程序会根据 profile 自动生成状态索引、初始协方差、系统矩阵和量测矩阵，
 并在 `results.Data.ESKF.StateModel` 中记录实际使用的状态块与索引。新增状态时，
-应在 `algorithm/state_model` 中定义状态块及其 profile 组合，再在
+应在 `state_model` 中定义状态块及其 profile 组合，再在
 `InertialErrorStateModel` 中实现该状态与动力学、量测和反馈之间的耦合；
 `ErrorStateKF` 的通用卡尔曼运算无需修改。
+
+与功能职责相关的主要目录如下：
+
+- `algorithm`：ESKF 主流程和通用卡尔曼滤波数值核心。
+- `state_model`：误差状态 profile、状态块、索引布局及惯导误差模型。
+- `sensor_delay`：传感器总线延时所需的状态前推和回推补偿。
+- `measurement`：传感器采样数据与到达时刻的组织。
 
 ## 协作流程
 
