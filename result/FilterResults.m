@@ -25,10 +25,15 @@
             obj.Error = struct();
         end
 
-        function registerAlgorithm(obj, algorithmName, runs, numSamples)
+        function registerAlgorithm(obj, algorithmName, runs, numSamples, stateModelMetadata)
             %REGISTERALGORITHM 为算法结果预分配数组。
+            if nargin < 5
+                stateModelMetadata = struct();
+            end
+
             name = char(algorithmName);
             result = struct();
+            result.StateModel = stateModelMetadata;
             result.PositionLlh = nan(numSamples, 3, runs);
             result.VelocityEnu = nan(numSamples, 3, runs);
             result.Euler = nan(numSamples, 3, runs);

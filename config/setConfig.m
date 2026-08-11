@@ -94,8 +94,13 @@ cfg.noise.gps.positionStd = [1.0; 1.0; 2.0]; % ENU 位置: m
 %% 算法配置
 cfg.algorithm.isESKFOn = true;
 
+% 误差状态模型配置。只需切换 profile 即可选择状态组合：
+% ins9  = 姿态误差 + 速度误差 + 位置误差；
+% ins15 = ins9 + 陀螺零偏误差 + 加速度计零偏误差。
+cfg.algorithm.stateModel.profile = "ins15";
+
 % 初始误差标准差用于每次 MC 的导航初值扰动和滤波初始协方差 P0。
-% 状态顺序为：姿态、速度、位置、陀螺零偏、加速度计零偏。
+% 状态顺序由所选 profile 中的状态块顺序统一生成。
 cfg.algorithm.initialError.attitudeStdDeg = [1.0; 1.0; 2.0];        % roll/pitch/yaw: deg
 cfg.algorithm.initialError.velocityStd = [0.1; 0.1; 0.1];        % ENU 速度: m/s
 cfg.algorithm.initialError.positionStd = [1.0; 1.0; 1.0];           % ENU 位置: m

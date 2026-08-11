@@ -6,15 +6,16 @@
 
 function results = ESKF(cfg, meas, results)
 %ESKF 水下 ESKF 组合导航流程函数。
-%   ESKF 只组织算法流程，15 维误差状态由 ErrorStateKF 维护。
+%   ESKF 只组织算法流程，误差状态模型由配置文件选择。
 
 %% 初始化
 algorithmName = "ESKF";
-param = ErrorStateKF.CreateDefaultParameters(cfg);
+stateModel = InertialErrorStateModel(cfg);
 time = meas.getTime();
 numSamples = meas.getNumSamples();
 progressStepCount = max(1, round(1.0 / cfg.sim.dt));
-results.registerAlgorithm(algorithmName, cfg.sim.runs, numSamples);
+results.registerAlgorithm( ...
+    algorithmName, cfg.sim.runs, numSamples, stateModel.GetMetadata());
 
 %% 滤波主循环
 for mc = 1:cfg.sim.runs
@@ -23,8 +24,8 @@ for mc = 1:cfg.sim.runs
     meas.prepareMonteCarloRun(mc);
 
     % 导航初值扰动和 P0 属于 ESKF 内部参数。
-    [navSol, imuBias, initialP] = ErrorStateKF.CreateInitialNavigation(meas, param);
-    fil = ErrorStateKF(cfg, param, initialP);
+    [navSol, imuBias, initialP] = stateModel.CreateInitialNavigation(meas);
+    fil = ErrorStateKF(stateModel, initialP);
 
     positionHistory = nan(3, numSamples);
     velocityHistory = nan(3, numSamples);
@@ -56,7 +57,7 @@ for mc = 1:cfg.sim.runs
         [navSol, correctedImu] = ErrorStateKF.PropagateNavigation(navSol, imuBias, imu, dt);
 
         %% 误差状态预测
-        % 时间更新只递推 15 维误差状态和协方差。
+        % 时间更新只递推所选模型的误差状态和协方差。
         fil.Predict(navSol, correctedImu, dt);
 
         %% DVL 量测更新
@@ -80,7 +81,7 @@ for mc = 1:cfg.sim.runs
         %% 闭环反馈
         % 将估计误差注入导航解算结果。
         errorState = fil.GetErrorState();
-        [navSol, imuBias] = ErrorStateKF.FeedbackNavigation(navSol, imuBias, errorState);
+        [navSol, imuBias] = stateModel.FeedbackNavigation(navSol, imuBias, errorState);
 
         % 反馈后必须清零误差状态，避免下一步重复补偿。
         fil.ResetErrorState();

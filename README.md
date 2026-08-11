@@ -59,6 +59,21 @@ restoredefaultpath;
 addpath(genpath(pwd));
 ```
 
+## 误差状态模型切换
+
+ESKF 的状态维数由 `config/setConfig.m` 中一个参数选择：
+
+```matlab
+cfg.algorithm.stateModel.profile = "ins9";  % 9维：姿态、速度、位置误差
+cfg.algorithm.stateModel.profile = "ins15"; % 15维：ins9 + 陀螺/加速度计零偏
+```
+
+程序会根据 profile 自动生成状态索引、初始协方差、系统矩阵和量测矩阵，
+并在 `results.Data.ESKF.StateModel` 中记录实际使用的状态块与索引。新增状态时，
+应在 `algorithm/state_model` 中定义状态块及其 profile 组合，再在
+`InertialErrorStateModel` 中实现该状态与动力学、量测和反馈之间的耦合；
+`ErrorStateKF` 的通用卡尔曼运算无需修改。
+
 ## 协作流程
 
 本项目建议采用分支 + Pull Request 的协作方式：
