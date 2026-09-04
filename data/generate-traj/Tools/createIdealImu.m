@@ -1,7 +1,7 @@
 function [gyro, accel] = createIdealImu(time, positionLlh, velocityEnu, attitudeCbn)
 %CREATEIDEALIMU 由相邻两帧导航真值反推理想 IMU 输出。
-%   gyro  是载体相对惯性空间的角速度，体坐标表达，单位 rad/s。
-%   accel 是比力，体坐标表达，单位 m/s^2。
+%   gyro  是载体相对惯性空间的角速度，RFU 体坐标表达，单位 rad/s。
+%   accel 是比力，RFU 体坐标表达，单位 m/s^2。
 
 numSamples = numel(time);
 gyro = zeros(numSamples, 3);
