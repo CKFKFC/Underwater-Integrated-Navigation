@@ -3,6 +3,13 @@ function [inputData, trajectoryInfo] = buildNavigationInputData(time, trajectory
 
 inputData = struct();
 inputData.time = time;
+inputData.metadata = struct();
+inputData.metadata.bodyFrame = "RFU";
+inputData.metadata.navigationFrame = "ENU";
+inputData.metadata.bodyAxisOrder = ["right", "forward", "up"];
+inputData.metadata.eulerOrder = ["roll", "pitch", "yaw"];
+inputData.metadata.eulerConvention = ...
+    "positive right-bank, nose-up, north-zero clockwise heading";
 
 % 初始状态用于初始化惯导名义状态和 ESKF 误差状态。
 inputData.initial = struct();
@@ -20,13 +27,13 @@ inputData.truth.velocityEnu = trajectory.VelocityEnu;
 inputData.truth.attitudeCbn = trajectory.AttitudeCbn;
 inputData.truth.attitudeEuler = trajectory.AttitudeEuler;
 
-% IMU 与主时间轴同频，gyro/accel 均为体坐标表达。
+% IMU 与主时间轴同频，gyro/accel 均按 RFU [right, forward, up] 表达。
 inputData.imu = struct();
 inputData.imu.time = sensorData.Imu.Time;
 inputData.imu.gyro = sensorData.Imu.Gyro;
 inputData.imu.accel = sensorData.Imu.Accel;
 
-% DVL 量测为体坐标系速度，valid 用于模拟缺测或无效量测。
+% DVL 量测为 RFU 体坐标系速度，valid 用于模拟缺测或无效量测。
 inputData.dvl = struct();
 inputData.dvl.time = sensorData.Dvl.Time;
 inputData.dvl.velocityBody = sensorData.Dvl.VelocityBody;
@@ -51,6 +58,8 @@ trajectoryInfo.positionLlh = trajectory.PositionLlh;
 trajectoryInfo.velocityEnu = trajectory.VelocityEnu;
 trajectoryInfo.attitudeEuler = trajectory.AttitudeEuler;
 trajectoryInfo.referenceLlh = trajectory.ReferenceLlh;
+trajectoryInfo.bodyFrame = "RFU";
+trajectoryInfo.navigationFrame = "ENU";
 trajectoryInfo.horizontalInfo = trajectory.HorizontalInfo;
 trajectoryInfo.depthInfo = trajectory.DepthInfo;
 trajectoryInfo.coordinateNote = [

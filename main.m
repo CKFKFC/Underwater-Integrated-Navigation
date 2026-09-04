@@ -39,9 +39,11 @@ end
 results.computeErrors(meas);
 results.saveToMat();
 
-% 绘制组合导航误差曲线。
+% 绘制二维水平轨迹对比和组合导航误差曲线。
 plotter = ResultPlotter(cfg, meas, results);
+plotter.plotTrajectory();
 plotter.plotPositionError();
 plotter.plotVelocityError();
 plotter.plotAttitudeError();
 plotter.plotRmse();
+plotter.plotPositionComponents();

@@ -76,10 +76,10 @@ end
 function [position, velocity] = createStraightMotion(time, cfg)
 %CREATESTRAIGHTMOTION 生成匀速直线轨迹。
 
-% CourseDeg 按 ENU 平面定义：0 deg 向东，90 deg 向北。
+% CourseDeg 与 RFU 欧拉航向一致：北零、顺时针为正。
 course = deg2rad(cfg.CourseDeg);
-eastVelocity = cfg.StraightSpeed * cos(course) * ones(size(time));
-northVelocity = cfg.StraightSpeed * sin(course) * ones(size(time));
+eastVelocity = cfg.StraightSpeed * sin(course) * ones(size(time));
+northVelocity = cfg.StraightSpeed * cos(course) * ones(size(time));
 
 east = eastVelocity .* time;
 north = northVelocity .* time;

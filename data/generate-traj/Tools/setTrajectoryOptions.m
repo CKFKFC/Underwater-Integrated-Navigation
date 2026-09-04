@@ -12,6 +12,8 @@ function cfg = setTrajectoryOptions()
 %   - 水平轨迹先在局部 ENU 坐标中设计，单位 m。
 %   - 输出位置统一转换为纬经高 [latitude, longitude, height]。
 %   - 深度 depth 向下为正，高度 height 向上为正。
+%   - b 系为 RFU [right, forward, up]，n 系为 ENU [east, north, up]。
+%   - 欧拉角为 [roll, pitch, yaw]：右倾、抬头、北零顺时针航向为正。
 
 cfg = struct();
 
@@ -59,8 +61,8 @@ cfg.HorizontalPeriod = 180.0;
 % straight/sCurve/lawnmower 的前进速度，单位 m/s。
 cfg.StraightSpeed = 1.0;
 
-% straight 直线航向角，单位 deg。0 deg 表示向东，90 deg 表示向北。
-cfg.CourseDeg = 90.0;
+% straight 直线航向角，单位 deg。0 deg 表示向北，90 deg 表示向东。
+cfg.CourseDeg = 0.0;
 
 % lawnmower 割草机轨迹几何参数，单位 m。
 % 相邻测线间距必须不小于 2 倍转弯半径；如果更大，会在两个 90 deg
