@@ -7,7 +7,9 @@ classdef InertialErrorStateModel
         ProfileName        % 当前状态组合名称，例如 ins9 或 ins15
         Blocks             % 按状态向量顺序排列的状态块定义
         Layout             % 状态总维数及每个状态块的全局索引
-        InitialErrorStd    % 严格按 Layout 顺序拼接的初始标准差
+        InitialPerturbationEnabled % 是否随机扰动输入的名义初值
+        InitialPerturbationStd     % 严格按 Layout 顺序拼接的扰动标准差
+        InitialCovarianceStd       % 严格按 Layout 顺序拼接的 P0 标准差
     end
 
     methods
@@ -22,7 +24,10 @@ classdef InertialErrorStateModel
             [obj.ProfileName, obj.Blocks] = createInertialStateProfile(cfg);
             obj.Cfg = cfg;
             obj.Layout = buildStateLayout(obj.Blocks);
-            obj.InitialErrorStd = vertcat(obj.Blocks.InitialStd);
+            obj.InitialPerturbationEnabled = ...
+                InertialErrorStateModel.GetInitialPerturbationEnabled(cfg);
+            obj.InitialPerturbationStd = vertcat(obj.Blocks.PerturbationStd);
+            obj.InitialCovarianceStd = vertcat(obj.Blocks.CovarianceStd);
         end
 
         %% 生成一次 Monte Carlo 的导航初值和初始协方差
@@ -31,23 +36,15 @@ classdef InertialErrorStateModel
             navSol = meas.getInitialNavigation();
             imuBias = meas.getInitialImuBias();
 
-            % 初始误差和 P0 使用完全相同的状态顺序，避免新增状态后扰动向量与
-            % 协方差对角线错位。randn 的长度随所选 profile 自动变化。
-            initialError = obj.InitialErrorStd .* randn(obj.Layout.Dimension, 1);
-            initialNavigationError = initialError;
-
-            % 真实 IMU 零偏已由量测对象生成。零偏状态在 P0 中仍保留不确定度，
-            % 但初始化时不再向名义零偏估计重复注入随机误差。
-            if obj.HasState("GyroBias")
-                initialNavigationError(obj.Layout.Index.GyroBias) = 0.0;
-            end
-            if obj.HasState("AccelBias")
-                initialNavigationError(obj.Layout.Index.AccelBias) = 0.0;
+            % 名义初值扰动和 P0 使用相同状态顺序，但由两套独立配置决定。
+            if obj.InitialPerturbationEnabled
+                initialError = obj.InitialPerturbationStd ...
+                    .* randn(obj.Layout.Dimension, 1);
+                [navSol, imuBias] = obj.FeedbackNavigation( ...
+                    navSol, imuBias, initialError);
             end
 
-            [navSol, imuBias] = obj.FeedbackNavigation( ...
-                navSol, imuBias, initialNavigationError);
-            covariance = diag(obj.InitialErrorStd.^2);
+            covariance = diag(obj.InitialCovarianceStd.^2);
         end
 
         %% 构建连续时间惯导误差动力学
@@ -105,7 +102,7 @@ classdef InertialErrorStateModel
                 F(velocityIndex, obj.Layout.Index.AccelBias) = -Cbn;
             end
 
-            % 连续白噪声向量固定为 [陀螺噪声; 加速度计噪声]。G 将体坐标噪声
+            % 连续白噪声向量固定为 [陀螺噪声; 加速度计噪声]。G 将 RFU 噪声
             % 投影到 ENU 姿态/速度误差，Qc 保存对应的连续时间噪声强度。
             G = zeros(stateDimension, 6);
             G(attitudeIndex, 1:3) = -Cbn;
@@ -120,7 +117,7 @@ classdef InertialErrorStateModel
 
         %% 构建 DVL 速度量测模型
         function [residual, H, R] = BuildDvlMeasurement(obj, navSol, measurement)
-            %BUILDDVLMEASUREMENT 生成体坐标系 DVL 速度量测模型。
+            %BUILDDVLMEASUREMENT 生成 RFU 体坐标系 DVL 速度量测模型。
             %   残差统一采用 z-h(x)。线性化 Cnb*v 后，姿态误差和 ENU 速度
             %   误差进入 H；当前未参与该量测的可选状态列保持为零。
             Cnb = navSol.Cbn.';
@@ -208,10 +205,25 @@ classdef InertialErrorStateModel
             metadata.BlockNames = obj.Layout.BlockNames;
             metadata.BlockDimensions = obj.Layout.BlockDimensions;
             metadata.Index = obj.Layout.Index;
+            metadata.BodyFrame = "RFU";
+            metadata.NavigationFrame = "ENU";
+            metadata.InitialPerturbationEnabled = obj.InitialPerturbationEnabled;
+            metadata.InitialPerturbationStd = obj.InitialPerturbationStd;
+            metadata.InitialCovarianceStd = obj.InitialCovarianceStd;
         end
     end
 
     methods (Static, Access = private)
+        %% 读取并验证名义初值扰动开关
+        function isEnabled = GetInitialPerturbationEnabled(cfg)
+            perturbation = cfg.algorithm.initialPerturbation;
+            isEnabled = perturbation.isEnabled;
+            if ~(islogical(isEnabled) && isscalar(isEnabled))
+                error("InertialErrorStateModel:InvalidInitialPerturbationSwitch", ...
+                    "cfg.algorithm.initialPerturbation.isEnabled must be a logical scalar.");
+            end
+        end
+
         %% 构建 ENU 误差方程所需的地球参数和雅可比
         function model = BuildEarthErrorModel(constants, latitude, altitude, velocityEnu)
             %BUILDEARTHERRORMODEL 汇总 ENU 误差方程需要的地球参数及雅可比。

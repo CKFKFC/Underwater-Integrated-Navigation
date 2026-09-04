@@ -10,6 +10,14 @@ classdef InertialErrorStateModelTest < matlab.unittest.TestCase
         end
     end
 
+    methods (TestMethodSetup)
+        function resetRandomSeed(testCase)
+            originalRng = rng;
+            testCase.addTeardown(@() rng(originalRng));
+            rng(20260824, "twister");
+        end
+    end
+
     methods (Test)
         function ins9ProfileBuildsExpectedLayout(testCase)
             model = InertialErrorStateModel( ...
@@ -156,6 +164,54 @@ classdef InertialErrorStateModelTest < matlab.unittest.TestCase
             testCase.verifyEqual(filter9.GetErrorState(), zeros(9, 1));
             testCase.verifyEqual(filter15.GetErrorState(), zeros(15, 1));
         end
+
+        function disabledPerturbationPreservesNominalStateAndNonzeroP0(testCase)
+            cfg = InertialErrorStateModelTest.createConfig("ins15");
+            cfg.algorithm.initialPerturbation.isEnabled = false;
+            cfg.algorithm.initialPerturbation.attitudeStd = 10.0 * ones(3, 1);
+            cfg.algorithm.initialPerturbation.velocityStd = 10.0 * ones(3, 1);
+            cfg.algorithm.initialPerturbation.positionStd = 10.0 * ones(3, 1);
+            meas = InertialErrorStateModelTest.createMeasurement(cfg);
+            expectedNavigation = meas.getInitialNavigation();
+            expectedBias = meas.getInitialImuBias();
+            model = InertialErrorStateModel(cfg);
+            expectedCovariance = diag(model.InitialCovarianceStd.^2);
+
+            [actualNavigation, actualBias, actualCovariance] = ...
+                model.CreateInitialNavigation(meas);
+
+            testCase.verifyEqual(actualNavigation.Cbn, expectedNavigation.Cbn, AbsTol=0.0);
+            testCase.verifyEqual( ...
+                actualNavigation.VelocityEnu, expectedNavigation.VelocityEnu, AbsTol=0.0);
+            testCase.verifyEqual( ...
+                actualNavigation.PositionLlh, expectedNavigation.PositionLlh, AbsTol=0.0);
+            testCase.verifyEqual(actualBias, expectedBias, AbsTol=0.0);
+            testCase.verifyEqual(actualCovariance, expectedCovariance, AbsTol=1.0e-18);
+            testCase.verifyGreaterThan(norm(actualCovariance, "fro"), 0.0);
+        end
+
+        function perturbationAndP0CanBeConfiguredIndependently(testCase)
+            cfg = InertialErrorStateModelTest.createConfig("ins9");
+            cfg.algorithm.initialPerturbation.isEnabled = true;
+            cfg.algorithm.initialPerturbation.attitudeStd = zeros(3, 1);
+            cfg.algorithm.initialPerturbation.velocityStd = [1.0; 0.0; 0.0];
+            cfg.algorithm.initialPerturbation.positionStd = zeros(3, 1);
+            cfg.algorithm.initialCovariance.attitudeStd = zeros(3, 1);
+            cfg.algorithm.initialCovariance.velocityStd = zeros(3, 1);
+            cfg.algorithm.initialCovariance.positionStd = zeros(3, 1);
+            meas = InertialErrorStateModelTest.createMeasurement(cfg);
+            expectedNavigation = meas.getInitialNavigation();
+            model = InertialErrorStateModel(cfg);
+
+            [actualNavigation, ~, actualCovariance] = ...
+                model.CreateInitialNavigation(meas);
+
+            testCase.verifyNotEqual( ...
+                actualNavigation.VelocityEnu(1), expectedNavigation.VelocityEnu(1));
+            testCase.verifyEqual( ...
+                actualNavigation.VelocityEnu(2:3), expectedNavigation.VelocityEnu(2:3), AbsTol=0.0);
+            testCase.verifyEqual(actualCovariance, zeros(9, 9), AbsTol=0.0);
+        end
     end
 
     methods (Static, Access = private)
@@ -194,6 +250,16 @@ classdef InertialErrorStateModelTest < matlab.unittest.TestCase
             cfg = InertialErrorStateModelTest.createConfig(profileName);
             model = InertialErrorStateModel(cfg);
             filter = ErrorStateKF(model, eye(model.Layout.Dimension));
+        end
+
+        function meas = createMeasurement(cfg)
+            cfg.sim.duration = 0.02;
+            cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input.mat");
+            cfg.data.isSensorNoiseMonteCarlo = false;
+            cfg.sensorDelay.isEnabled = false;
+            meas = StateAndMeasurement(cfg);
+            meas.loadInputData();
+            meas.checkInputData();
         end
     end
 end

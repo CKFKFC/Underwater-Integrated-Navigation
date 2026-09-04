@@ -18,20 +18,25 @@ cfg.path.outputFolder = fullfile(projectRoot, "data", "output");
 cfg.sim.dt = 0.01;
 
 % Monte Carlo 次数。实测数据模式下会自动改为 1。
-cfg.sim.runs = 1;
+cfg.sim.runs = 20;
 
 % 实际参与算法运行的仿真时长，单位 s。
 % inf 或 [] 表示使用输入 MAT 文件中的完整轨迹；例如设为 360.0 时，
 % 即使输入轨迹为 3600 s，算法、误差计算和绘图也只运行前 360 s。
-cfg.sim.duration = 2000;
+cfg.sim.duration = inf;
 
 %% 数据配置
 % mode = "simulation" 时，输入文件应包含真值和理想传感器数据。
 % mode = "real" 时，输入文件可包含已经带噪的实测传感器数据。
 cfg.data.mode = "simulation"; % "simulation" or "real"
-cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_straight_auv_3600s.mat");
+% cfg.data.file = fullfile(cfg.path.inputFolder, "trjMeasured10ms_input.mat");    % 模拟操场轨迹
+% cfg.data.file = fullfile(cfg.path.inputFolder, "MEMS-RFU.mat");    %操场MEMS
+% cfg.data.file = fullfile(cfg.path.inputFolder, "Fiber-Optic-RFU.mat");    %操场光纤
+cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_straight_auv_3600s.mat");   %直线轨迹
+% cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_lawnmower_auv_3600s.mat");  %割草机轨迹
 cfg.data.generateIdealMeasurement = false;
 cfg.data.coordinateFrame = "ENU";
+cfg.data.bodyFrame = "RFU";
 cfg.data.positionType = "latitude-longitude-height";
 
 %% 参考高度
@@ -41,11 +46,11 @@ cfg.reference.surfaceAltitude = 0.0;
 
 %% 传感器开关
 cfg.sensor.imu.isEnabled = true;
-cfg.sensor.dvl.isEnabled = true;
+cfg.sensor.dvl.isEnabled = false;
 cfg.sensor.depth.isEnabled = false;
 cfg.sensor.gps.isEnabled = false;
 
-% DVL 量测统一使用载体坐标系速度。
+% DVL 量测统一使用 RFU 载体坐标系速度 [right; forward; up]。
 % 可用时间为 N-by-2 矩阵，每行表示 [开始时间, 结束时间]，单位 s。
 cfg.sensor.dvl.availableTime = [0.0, inf];
 cfg.sensor.gps.availableTime = [0.0, inf];
@@ -72,8 +77,8 @@ degreePerHourToRadianPerSecond = deg2rad(1.0) / secondsPerHour;
 degreePerSqrtHourToRadianPerSqrtSecond = deg2rad(1.0) / sqrt(secondsPerHour);
 
 % 常值零偏 1σ。每次 Monte Carlo 运行生成一次，整段轨迹内保持不变。
-cfg.noise.imu.accelBiasStdMicroG = [100.0; 100.0; 100.0];     % 加速度计零偏: ug
-cfg.noise.imu.gyroBiasStdDegPerHour = [1.0; 1.0; 1.0];        % 陀螺零偏: deg/h
+cfg.noise.imu.accelBiasStdMicroG = [50.0; 50.0; 50.0];     % 加速度计零偏: ug
+cfg.noise.imu.gyroBiasStdDegPerHour = [0.1; 0.1; 0.1];        % 陀螺零偏: deg/h
 cfg.noise.imu.accelBiasStd = cfg.noise.imu.accelBiasStdMicroG ...
     * microGToMeterPerSecondSquared;                          % m/s^2
 cfg.noise.imu.gyroBiasStd = cfg.noise.imu.gyroBiasStdDegPerHour ...
@@ -82,8 +87,8 @@ cfg.noise.imu.gyroBiasStd = cfg.noise.imu.gyroBiasStdDegPerHour ...
 % 白噪声连续强度。
 % 陀螺用角随机游走系数 deg/sqrt(h)，转换为 rad/sqrt(s)。
 % 加速度计用噪声密度 micro-g/sqrt(Hz)，转换为 (m/s^2)/sqrt(Hz)。
-cfg.noise.imu.gyroRandomWalkDegPerSqrtHour = [0.15; 0.15; 0.15];
-cfg.noise.imu.accelRandomWalkMicroGPerSqrtHz = [15.0; 15.0; 15.0];
+cfg.noise.imu.gyroRandomWalkDegPerSqrtHour = [0.1/6; 0.1/6; 0.1/6];
+cfg.noise.imu.accelRandomWalkMicroGPerSqrtHz = [50.0/6; 50.0/6; 50.0/6];
 cfg.noise.imu.gyroNoiseDensity = cfg.noise.imu.gyroRandomWalkDegPerSqrtHour ...
     * degreePerSqrtHourToRadianPerSqrtSecond;                  % rad/sqrt(s)
 cfg.noise.imu.accelNoiseDensity = cfg.noise.imu.accelRandomWalkMicroGPerSqrtHz ...
@@ -108,34 +113,59 @@ cfg.algorithm.isESKFOn = true;
 % ins15 = ins9 + 陀螺零偏误差 + 加速度计零偏误差。
 cfg.algorithm.stateModel.profile = "ins9";
 
-% 初始误差标准差用于每次 MC 的导航初值扰动和滤波初始协方差 P0。
-% 状态顺序由所选 profile 中的状态块顺序统一生成。
-cfg.algorithm.initialError.attitudeStdDeg = [1.0; 1.0; 2.0];        % roll/pitch/yaw: deg
-cfg.algorithm.initialError.velocityStd = [0.1; 0.1; 0.1];        % ENU 速度: m/s
-cfg.algorithm.initialError.positionStd = [1.0; 1.0; 1.0];           % ENU 位置: m
-cfg.algorithm.initialError.gyroBiasStdDegPerHour = [1.0; 1.0; 1.0]; % 陀螺零偏估计误差: deg/h
-cfg.algorithm.initialError.accelBiasStdMicroG = [100.0; 100.0; 100.0]; % 加速度计零偏估计误差: micro-g
+%% 名义初值随机扰动
+% 初值扰动只用于仿真试验，不决定滤波器 P0。姿态扰动是 ENU 表达的小失准角
+% [east-axis; north-axis; up-axis]，不是 RFU 欧拉角本身。
+cfg.algorithm.initialPerturbation.attitudeStdDeg = [0.1; 0.1; 0.5];
+cfg.algorithm.initialPerturbation.velocityStd = [0.1; 0.1; 0.1];        % ENU: m/s
+cfg.algorithm.initialPerturbation.positionStd = [1.0; 1.0; 1.0];       % ENU: m
+cfg.algorithm.initialPerturbation.gyroBiasStdDegPerHour = zeros(3, 1); % RFU: deg/h
+cfg.algorithm.initialPerturbation.accelBiasStdMicroG = zeros(3, 1);    % RFU: micro-g
+cfg.algorithm.initialPerturbation.attitudeStd = ...
+    deg2rad(cfg.algorithm.initialPerturbation.attitudeStdDeg);
+cfg.algorithm.initialPerturbation.gyroBiasStd = ...
+    cfg.algorithm.initialPerturbation.gyroBiasStdDegPerHour ...
+    * degreePerHourToRadianPerSecond;
+cfg.algorithm.initialPerturbation.accelBiasStd = ...
+    cfg.algorithm.initialPerturbation.accelBiasStdMicroG ...
+    * microGToMeterPerSecondSquared;
 
-% 滤波器内部统一使用 SI 单位，避免在算法类中再次硬编码单位换算。
-cfg.algorithm.initialError.attitudeStd = deg2rad(cfg.algorithm.initialError.attitudeStdDeg);
-cfg.algorithm.initialError.gyroBiasStd = cfg.algorithm.initialError.gyroBiasStdDegPerHour ...
-    * degreePerHourToRadianPerSecond;                            % rad/s
-cfg.algorithm.initialError.accelBiasStd = cfg.algorithm.initialError.accelBiasStdMicroG ...
-    * microGToMeterPerSecondSquared;                              % m/s^2
+%% 滤波初始协方差 P0
+% P0 与名义初值扰动独立设置。各字段给出 1 sigma 标准差，状态模型按 profile
+% 顺序拼接后生成 P0=diag(initialCovarianceStd.^2)。姿态项仍是 ENU 小失准角，
+% 不是 [roll; pitch; yaw] 欧拉角标准差。
+cfg.algorithm.initialCovariance.attitudeStdDeg = [0.1; 0.1; 0.5];
+cfg.algorithm.initialCovariance.velocityStd = [0.1; 0.1; 0.1];        % ENU: m/s
+cfg.algorithm.initialCovariance.positionStd = [1.0; 1.0; 1.0];       % ENU: m
+cfg.algorithm.initialCovariance.gyroBiasStdDegPerHour = ...
+    [1.0; 1.0; 1.0];                                                % RFU: deg/h
+cfg.algorithm.initialCovariance.accelBiasStdMicroG = ...
+    [100.0; 100.0; 100.0];                                         % RFU: micro-g
+cfg.algorithm.initialCovariance.attitudeStd = ...
+    deg2rad(cfg.algorithm.initialCovariance.attitudeStdDeg);
+cfg.algorithm.initialCovariance.gyroBiasStd = ...
+    cfg.algorithm.initialCovariance.gyroBiasStdDegPerHour ...
+    * degreePerHourToRadianPerSecond;
+cfg.algorithm.initialCovariance.accelBiasStd = ...
+    cfg.algorithm.initialCovariance.accelBiasStdMicroG ...
+    * microGToMeterPerSecondSquared;
 
 %% 结果输出配置
 cfg.result.outputFolder = cfg.path.outputFolder;
 cfg.result.fileName = "eskf_results.mat";
 
 %% 数据模式派生设置
-% 实测数据通常已经包含噪声，因此默认不做传感器噪声 Monte Carlo 平均。
+% 实测数据已经包含传感器误差，因此不再向输入 IMU/RTK 数据人工叠加噪声。
+% cfg.noise 中的噪声密度和量测标准差仍用于滤波器 Q/R，应按实测标定结果设置。
 switch cfg.data.mode
     case "simulation"
         cfg.data.isSensorNoiseMonteCarlo = true;
+        cfg.algorithm.initialPerturbation.isEnabled = true;
     case "real"
         cfg.sim.runs = 1;
         cfg.data.generateIdealMeasurement = false;
         cfg.data.isSensorNoiseMonteCarlo = false;
+        cfg.algorithm.initialPerturbation.isEnabled = false;
     otherwise
         error("setConfig:InvalidDataMode", ...
             "cfg.data.mode must be either ""simulation"" or ""real"".");
