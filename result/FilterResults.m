@@ -65,14 +65,17 @@
 
         %% 计算各算法的导航误差和 RMSE
         function computeErrors(obj, meas)
-            %COMPUTEERRORS 在有真值时计算 ENU 误差和 RMSE。
+            %COMPUTEERRORS 按实际提供的参考量分别计算 ENU 误差和 RMSE。
             if ~meas.hasTruth()
                 warning("FilterResults:TruthUnavailable", ...
-                    "Truth trajectory is unavailable. Error and RMSE are not computed.");
+                    "Reference trajectory is unavailable. Error and RMSE are not computed.");
                 return;
             end
 
             truth = meas.getTruthArrays();
+            hasPositionTruth = meas.hasPositionTruth();
+            hasVelocityTruth = meas.hasVelocityTruth();
+            hasAttitudeTruth = meas.hasAttitudeTruth();
             algorithmNames = fieldnames(obj.Data);
             for nameIndex = 1:numel(algorithmNames)
                 name = algorithmNames{nameIndex};
@@ -85,22 +88,34 @@
 
                 for mc = 1:runs
                     for sampleIndex = 1:numSamples
-                        estimatePosition = result.PositionLlh(sampleIndex, :, mc).';
-                        truthPosition = truth.PositionLlh(sampleIndex, :).';
-                        positionError(sampleIndex, :, mc) = llh2enuError(estimatePosition, truthPosition).';
+                        if hasPositionTruth
+                            estimatePosition = result.PositionLlh(sampleIndex, :, mc).';
+                            truthPosition = truth.PositionLlh(sampleIndex, :).';
+                            positionError(sampleIndex, :, mc) = ...
+                                llh2enuError(estimatePosition, truthPosition).';
+                        end
 
-                        estimateVelocity = result.VelocityEnu(sampleIndex, :, mc).';
-                        truthVelocity = truth.VelocityEnu(sampleIndex, :).';
-                        velocityError(sampleIndex, :, mc) = (estimateVelocity - truthVelocity).';
+                        if hasVelocityTruth
+                            estimateVelocity = result.VelocityEnu(sampleIndex, :, mc).';
+                            truthVelocity = truth.VelocityEnu(sampleIndex, :).';
+                            velocityError(sampleIndex, :, mc) = ...
+                                (estimateVelocity - truthVelocity).';
+                        end
 
-                        estimateCbn = dcmFromEuler(result.Euler(sampleIndex, :, mc).');
-                        truthCbn = truth.AttitudeCbn(:, :, sampleIndex);
-                        attitudeError(sampleIndex, :, mc) = obj.computeAttitudeMisalignment( ...
-                            estimateCbn, truthCbn).';
+                        if hasAttitudeTruth
+                            estimateCbn = dcmFromEuler( ...
+                                result.Euler(sampleIndex, :, mc).');
+                            truthCbn = truth.AttitudeCbn(:, :, sampleIndex);
+                            attitudeError(sampleIndex, :, mc) = ...
+                                obj.computeAttitudeMisalignment(estimateCbn, truthCbn).';
+                        end
                     end
                 end
 
                 errorData = struct();
+                errorData.HasPositionTruth = hasPositionTruth;
+                errorData.HasVelocityTruth = hasVelocityTruth;
+                errorData.HasAttitudeTruth = hasAttitudeTruth;
                 errorData.PositionEnu = positionError;
                 errorData.VelocityEnu = velocityError;
                 errorData.AttitudeMisalignment = attitudeError;

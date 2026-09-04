@@ -59,6 +59,19 @@ restoredefaultpath;
 addpath(genpath(pwd));
 ```
 
+## 坐标系与欧拉角约定
+
+- 导航系 `n`：ENU `[east, north, up]`（东北天）。
+- 载体系 `b`：RFU `[right, forward, up]`（右前上）。
+- `Cbn`：把 RFU 载体系向量转换到 ENU 导航系，即 `vEnu = Cbn * vBody`。
+- 欧拉角顺序：`[roll, pitch, yaw]`。右侧下沉为正滚转，抬头为正俯仰；
+  航向以北为零，顺时针转向东为正。
+- 零欧拉角时 `Cbn = eye(3)`，此时右/前/上分别与东/北/天重合。
+
+输入 MAT 文件中的 `imu.gyro`、`imu.accel` 和 `dvl.velocityBody` 必须按
+RFU 列顺序保存。若只提供欧拉角，`initial.attitudeEuler` 和
+`truth.attitudeEuler` 也必须遵守上述定义。
+
 ## 误差状态模型切换
 
 ESKF 的状态维数由 `config/setConfig.m` 中一个参数选择：
@@ -77,6 +90,20 @@ IMU 常值零偏是否注入直接由 profile 的状态块决定：包含 `GyroB
 应在 `state_model` 中定义状态块及其 profile 组合，再在
 `InertialErrorStateModel` 中实现该状态与动力学、量测和反馈之间的耦合；
 `ErrorStateKF` 的通用卡尔曼运算无需修改。
+
+名义初值随机扰动与滤波初始协方差已经独立配置：
+
+```matlab
+cfg.algorithm.initialPerturbation   % 是否/如何扰动输入的名义初值
+cfg.algorithm.initialCovariance     % P0 各状态的 1 sigma 标准差
+```
+
+实测模式默认关闭 `initialPerturbation.isEnabled` 和传感器噪声叠加，但
+`initialCovariance` 仍用于生成 `P0`。`cfg.noise` 中的 IMU 噪声密度与外部量测
+标准差仍决定滤波器的 `Q/R`，应填写实测标定值，而不是全部置零。
+
+参考数据可以只提供 `truth.positionLlh`（例如 RTK 纬经高）。此时程序只计算
+ENU 位置误差和位置 RMSE，不要求额外提供速度或姿态真值。
 
 与功能职责相关的主要目录如下：
 

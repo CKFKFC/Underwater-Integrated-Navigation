@@ -25,37 +25,50 @@
         end
 
         function plotTrajectory(obj)
-            %PLOTTRAJECTORY 绘制经纬度水平轨迹。
+            %PLOTTRAJECTORY 绘制真实轨迹与算法轨迹的二维 ENU 水平投影。
             algorithmNames = fieldnames(obj.Results.Data);
             if isempty(algorithmNames)
                 return;
             end
 
-            figure("Name", "Trajectory");
+            if obj.Meas.hasPositionTruth()
+                truth = obj.Meas.getTruthArrays();
+                referenceLlh = truth.PositionLlh(1, :).';
+            else
+                firstResult = obj.Results.Data.(algorithmNames{1});
+                referenceLlh = firstResult.PositionLlh(1, :, 1).';
+            end
+
+            figure("Name", "Horizontal Trajectory");
             hold on;
             grid on;
 
-            if obj.Meas.hasTruth()
-                truth = obj.Meas.getTruthArrays();
-                plot(rad2deg(truth.PositionLlh(:, 2)), rad2deg(truth.PositionLlh(:, 1)), ...
+            if obj.Meas.hasPositionTruth()
+                truthPositionEnu = llh2enuError(truth.PositionLlh, referenceLlh);
+                plot(truthPositionEnu(:, 1), truthPositionEnu(:, 2), ...
                     "k-", "LineWidth", 1.5, "DisplayName", "Truth");
             end
 
             for nameIndex = 1:numel(algorithmNames)
                 name = algorithmNames{nameIndex};
                 position = obj.Results.Data.(name).PositionLlh(:, :, 1);
-                plot(rad2deg(position(:, 2)), rad2deg(position(:, 1)), ...
+                positionEnu = llh2enuError(position, referenceLlh);
+                plot(positionEnu(:, 1), positionEnu(:, 2), ...
                     "LineWidth", 1.2, "DisplayName", name);
             end
 
-            xlabel("Longitude (deg)");
-            ylabel("Latitude (deg)");
+            axis equal;
+            xlabel("东向位置 (m)");
+            ylabel("北向位置 (m)");
             legend("Location", "best");
-            title("Underwater Integrated Navigation Trajectory");
+            title("真实轨迹与算法轨迹二维对比");
         end
 
         function plotPositionError(obj)
             %PLOTPOSITIONERROR 绘制 ENU 位置误差的 MC 平均 RMSE。
+            if ~obj.Meas.hasPositionTruth()
+                return;
+            end
             algorithmNames = fieldnames(obj.Results.Error);
             if isempty(algorithmNames)
                 return;
@@ -88,6 +101,9 @@
 
         function plotVelocityError(obj)
             %PLOTVELOCITYERROR 绘制 ENU 速度误差的 MC 平均 RMSE。
+            if ~obj.Meas.hasVelocityTruth()
+                return;
+            end
             algorithmNames = fieldnames(obj.Results.Error);
             if isempty(algorithmNames)
                 return;
@@ -120,6 +136,9 @@
 
         function plotAttitudeError(obj)
             %PLOTATTITUDEERROR 绘制姿态小失准角误差的 MC 平均 RMSE。
+            if ~obj.Meas.hasAttitudeTruth()
+                return;
+            end
             algorithmNames = fieldnames(obj.Results.Error);
             if isempty(algorithmNames)
                 return;
@@ -152,6 +171,9 @@
 
         function plotRmse(obj)
             %PLOTRMSE 绘制位置 RMSE。
+            if ~obj.Meas.hasPositionTruth()
+                return;
+            end
             algorithmNames = fieldnames(obj.Results.Error);
             if isempty(algorithmNames)
                 return;
@@ -172,6 +194,68 @@
             ylabel("RMSE (m)");
             title("Position RMSE");
             legend("Location", "best");
+        end
+
+        function plotPositionComponents(obj)
+            %PLOTPOSITIONCOMPONENTS 分别绘制算法和真值的 ENU 位置分量。
+            if ~obj.Meas.hasPositionTruth()
+                warning("ResultPlotter:PositionTruthUnavailable", ...
+                    "Position truth is unavailable. ENU position component plots are not created.");
+                return;
+            end
+
+            algorithmNames = fieldnames(obj.Results.Data);
+            if isempty(algorithmNames)
+                return;
+            end
+
+            time = obj.Meas.getTime();
+            truth = obj.Meas.getTruthArrays();
+            referenceLlh = truth.PositionLlh(1, :).';
+            truthPositionEnu = llh2enuError(truth.PositionLlh, referenceLlh);
+
+            estimatedPositionEnu = struct();
+            for nameIndex = 1:numel(algorithmNames)
+                name = algorithmNames{nameIndex};
+                positionLlh = obj.Results.Data.(name).PositionLlh(:, :, 1);
+                estimatedPositionEnu.(name) = llh2enuError(positionLlh, referenceLlh);
+            end
+
+            componentNames = ["东向", "北向", "天向"];
+            figure("Name", "Estimated ENU Position");
+            tiledlayout(3, 1);
+            for componentIndex = 1:3
+                nexttile;
+                hold on;
+                grid on;
+                for nameIndex = 1:numel(algorithmNames)
+                    name = algorithmNames{nameIndex};
+                    plot(time, estimatedPositionEnu.(name)(:, componentIndex), ...
+                        "LineWidth", 1.1, "DisplayName", name);
+                end
+                ylabel(componentNames(componentIndex) + "位置 (m)");
+                title(componentNames(componentIndex) + "位置");
+                legend("Location", "best");
+                if componentIndex == 3
+                    xlabel("时间 (s)");
+                end
+            end
+            sgtitle("算法解算 ENU 位置（第1次 Monte Carlo）");
+
+            figure("Name", "Truth ENU Position");
+            tiledlayout(3, 1);
+            for componentIndex = 1:3
+                nexttile;
+                plot(time, truthPositionEnu(:, componentIndex), ...
+                    "k-", "LineWidth", 1.1);
+                grid on;
+                ylabel(componentNames(componentIndex) + "位置 (m)");
+                title(componentNames(componentIndex) + "位置");
+                if componentIndex == 3
+                    xlabel("时间 (s)");
+                end
+            end
+            sgtitle("真实 ENU 位置");
         end
     end
 end

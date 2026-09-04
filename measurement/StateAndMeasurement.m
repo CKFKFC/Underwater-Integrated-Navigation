@@ -45,6 +45,8 @@
         %% check input data
         function checkInputData(obj)
             % 主时间轴和 IMU 是惯导递推的必需输入。
+            obj.checkFrameConfig();
+            obj.checkInputFrameMetadata();
             obj.checkTimeData();
             obj.checkImuData();
             obj.checkInitialData();
@@ -211,9 +213,15 @@
                 return;
             end
 
-            truth.PositionLlh = obj.GtMeas.Truth.PositionLlh(index, :).';
-            truth.VelocityEnu = obj.GtMeas.Truth.VelocityEnu(index, :).';
-            truth.Cbn = obj.GtMeas.Truth.AttitudeCbn(:, :, index);
+            if obj.hasPositionTruth()
+                truth.PositionLlh = obj.GtMeas.Truth.PositionLlh(index, :).';
+            end
+            if obj.hasVelocityTruth()
+                truth.VelocityEnu = obj.GtMeas.Truth.VelocityEnu(index, :).';
+            end
+            if obj.hasAttitudeTruth()
+                truth.Cbn = obj.GtMeas.Truth.AttitudeCbn(:, :, index);
+            end
         end
 
         %% get truth arrays
@@ -223,9 +231,25 @@
 
         %% check truth availability
         function tf = hasTruth(obj)
+            tf = obj.hasPositionTruth() || obj.hasVelocityTruth() ...
+                || obj.hasAttitudeTruth();
+        end
+
+        %% check position truth availability
+        function tf = hasPositionTruth(obj)
             tf = isfield(obj.GtMeas, "Truth") ...
-                && ~isempty(obj.GtMeas.Truth.PositionLlh) ...
-                && ~isempty(obj.GtMeas.Truth.VelocityEnu) ...
+                && ~isempty(obj.GtMeas.Truth.PositionLlh);
+        end
+
+        %% check velocity truth availability
+        function tf = hasVelocityTruth(obj)
+            tf = isfield(obj.GtMeas, "Truth") ...
+                && ~isempty(obj.GtMeas.Truth.VelocityEnu);
+        end
+
+        %% check attitude truth availability
+        function tf = hasAttitudeTruth(obj)
+            tf = isfield(obj.GtMeas, "Truth") ...
                 && ~isempty(obj.GtMeas.Truth.AttitudeCbn);
         end
     end
@@ -235,6 +259,7 @@
         function gtMeas = loadAllData(obj, inputData)
             % 数据加载按类型分块，便于后续替换数据生成函数。
             gtMeas = struct();
+            gtMeas.Metadata = obj.getField(inputData, "metadata", struct());
             gtMeas.Time = obj.loadTimeData(inputData);
             gtMeas.Initial = obj.loadInitialData(inputData);
             gtMeas.Truth = obj.loadTruthData(inputData, gtMeas.Time);
@@ -459,6 +484,37 @@
             measurement.DelaySteps = obj.getDelaySteps("dvl");
             measurement.DelaySeconds = measurement.DelaySteps * obj.Cfg.sim.dt;
             measurement.Valid = true;
+        end
+
+        %% check configured coordinate frames
+        function checkFrameConfig(obj)
+            navigationFrame = upper(string(obj.getField( ...
+                obj.Cfg.data, "coordinateFrame", "")));
+            bodyFrame = upper(string(obj.getField(obj.Cfg.data, "bodyFrame", "")));
+            if ~isscalar(navigationFrame) || navigationFrame ~= "ENU"
+                error("StateAndMeasurement:UnsupportedNavigationFrame", ...
+                    "This implementation requires cfg.data.coordinateFrame = ""ENU"".");
+            end
+            if ~isscalar(bodyFrame) || bodyFrame ~= "RFU"
+                error("StateAndMeasurement:UnsupportedBodyFrame", ...
+                    "This implementation requires cfg.data.bodyFrame = ""RFU"".");
+            end
+        end
+
+        %% compare optional input metadata with configured frames
+        function checkInputFrameMetadata(obj)
+            metadata = obj.GtMeas.Metadata;
+            inputNavigationFrame = upper(string(obj.getField( ...
+                metadata, "navigationFrame", "ENU")));
+            inputBodyFrame = upper(string(obj.getField(metadata, "bodyFrame", "RFU")));
+            if ~isscalar(inputNavigationFrame) || inputNavigationFrame ~= "ENU"
+                error("StateAndMeasurement:InputNavigationFrameMismatch", ...
+                    "inputData.metadata.navigationFrame must be ""ENU"".");
+            end
+            if ~isscalar(inputBodyFrame) || inputBodyFrame ~= "RFU"
+                error("StateAndMeasurement:InputBodyFrameMismatch", ...
+                    "inputData.metadata.bodyFrame must be ""RFU"".");
+            end
         end
 
         %% check time data
