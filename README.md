@@ -1,6 +1,6 @@
-# Underwater-CL-2026
+# Underwater-Integrated-Navigation
 
-面向水下多平台的惯性基协同导航 MATLAB 代码仓库。本仓库用于课题组成员共同开发、维护和验证组合导航、协同定位等相关算法代码。
+面向水下载体的惯性基组合导航 MATLAB 代码仓库。本仓库用于开发、维护和验证捷联惯性导航、误差状态卡尔曼滤波、多传感器量测融合及传感器延时补偿等相关算法。
 
 ## 新成员必读
 
@@ -34,8 +34,8 @@
 第一次获取代码：
 
 ```powershell
-git clone https://github.com/UnderWater-Swarm/Underwater-CL-2026.git
-cd Underwater-CL-2026
+git clone https://github.com/CKFKFC/Underwater-Integrated-Navigation.git
+cd Underwater-Integrated-Navigation
 code .
 ```
 
