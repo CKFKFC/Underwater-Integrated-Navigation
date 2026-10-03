@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 # 代码阅读与使用说明
 
 本文围绕当前源码，说明如何运行导航程序、准备输入、选择配置、阅读滤波流程以及解释输出。入口是同目录的 `main.m`。
+=======
+# Underwater-Integrated-Navigation
+
+面向水下载体的惯性基组合导航 MATLAB 代码仓库。本仓库用于开发、维护和验证捷联惯性导航、误差状态卡尔曼滤波、多传感器量测融合及传感器延时补偿等相关算法。
+>>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
 
 ## 1. 从哪里开始读
 
@@ -26,7 +32,36 @@ GitHub 仓库不附带任何 MAT 文件，包括仿真轨迹、实测输入和�
 
 ### 2.1 第一步：在本地生成仿真轨迹
 
+<<<<<<< HEAD
 在 MATLAB 中将当前文件夹切换到含 `main.m` 的项目主目录，然后在命令窗口执行：
+=======
+具体 MATLAB 工具箱需求会随着算法模块逐步明确。若某个脚本依赖特定工具箱，请在脚本注释或对应文档中说明。
+
+## 快速开始
+
+第一次获取代码：
+
+```powershell
+git clone https://github.com/CKFKFC/Underwater-Integrated-Navigation.git
+cd Underwater-Integrated-Navigation
+code .
+```
+
+开始开发前同步主分支：
+
+```powershell
+git switch main
+git pull
+```
+
+为自己的任务创建分支：
+
+```powershell
+git switch -c feature/姓名-任务简述
+```
+
+在 MATLAB 中建议从仓库根目录运行：
+>>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
 
 ```matlab
 addpath(genpath(pwd));
@@ -34,7 +69,64 @@ genetraj(TrajectoryType="straight", Duration=3600.0, SampleInterval=0.01, ...
     OutputFile="data/input/navigation_input_straight_auv_3600s.mat");
 ```
 
+<<<<<<< HEAD
 该命令生成 3600 s 的直线轨迹，并保存到项目下的 `data/input/navigation_input_straight_auv_3600s.mat`，与主程序默认输入路径一致。输出文件夹不存在时会自动创建。文件包含导航初值、真值以及理想 IMU、DVL、深度和 GPS 数据，可直接作为本项目的仿真输入。
+=======
+## 坐标系与欧拉角约定
+
+- 导航系 `n`：ENU `[east, north, up]`（东北天）。
+- 载体系 `b`：RFU `[right, forward, up]`（右前上）。
+- `Cbn`：把 RFU 载体系向量转换到 ENU 导航系，即 `vEnu = Cbn * vBody`。
+- 欧拉角顺序：`[roll, pitch, yaw]`。右侧下沉为正滚转，抬头为正俯仰；
+  航向以北为零，顺时针转向东为正。
+- 零欧拉角时 `Cbn = eye(3)`，此时右/前/上分别与东/北/天重合。
+
+输入 MAT 文件中的 `imu.gyro`、`imu.accel` 和 `dvl.velocityBody` 必须按
+RFU 列顺序保存。若只提供欧拉角，`initial.attitudeEuler` 和
+`truth.attitudeEuler` 也必须遵守上述定义。
+
+## 误差状态模型切换
+
+ESKF 的状态维数由 `config/setConfig.m` 中一个参数选择：
+
+```matlab
+cfg.algorithm.stateModel.profile = "ins9";  % 9维：姿态、速度、位置误差
+cfg.algorithm.stateModel.profile = "ins15"; % 15维：ins9 + 陀螺/加速度计零偏
+```
+
+IMU 常值零偏是否注入直接由 profile 的状态块决定：包含 `GyroBias` 时注入
+陀螺零偏，包含 `AccelBias` 时注入加速度计零偏。新增 profile 只需定义状态块，
+无需增加与维数名称绑定的零偏开关。
+
+程序会根据 profile 自动生成状态索引、初始协方差、系统矩阵和量测矩阵，
+并在 `results.Data.ESKF.StateModel` 中记录实际使用的状态块与索引。新增状态时，
+应在 `state_model` 中定义状态块及其 profile 组合，再在
+`InertialErrorStateModel` 中实现该状态与动力学、量测和反馈之间的耦合；
+`ErrorStateKF` 的通用卡尔曼运算无需修改。
+
+名义初值随机扰动与滤波初始协方差已经独立配置：
+
+```matlab
+cfg.algorithm.initialPerturbation   % 是否/如何扰动输入的名义初值
+cfg.algorithm.initialCovariance     % P0 各状态的 1 sigma 标准差
+```
+
+实测模式默认关闭 `initialPerturbation.isEnabled` 和传感器噪声叠加，但
+`initialCovariance` 仍用于生成 `P0`。`cfg.noise` 中的 IMU 噪声密度与外部量测
+标准差仍决定滤波器的 `Q/R`，应填写实测标定值，而不是全部置零。
+
+参考数据可以只提供 `truth.positionLlh`（例如 RTK 纬经高）。此时程序只计算
+ENU 位置误差和位置 RMSE，不要求额外提供速度或姿态真值。
+
+与功能职责相关的主要目录如下：
+
+- `algorithm`：ESKF 主流程和通用卡尔曼滤波数值核心。
+- `state_model`：误差状态 profile、状态块、索引布局及惯导误差模型。
+- `sensor_delay`：传感器总线延时所需的状态前推和回推补偿。
+- `measurement`：传感器采样数据与到达时刻的组织。
+
+## 协作流程
+>>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
 
 可在命令窗口确认文件已经生成：
 

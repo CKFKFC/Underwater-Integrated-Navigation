@@ -3,7 +3,7 @@
 %INSUPDATEENU 执行 ENU 坐标下的捷联惯导递推。
 % 作者: Kefan Chen
 % 日期: 2026-07-04
-% 功能: 更新姿态矩阵、ENU 速度和纬经高位置。
+% 功能: 使用 RFU [right; forward; up] IMU 更新姿态、ENU 速度和纬经高位置。
 
 constants = getWgs84Constants();
 latitude = oldPositionLlh(1);

@@ -45,11 +45,14 @@
         %% check input data
         function checkInputData(obj)
             % 主时间轴和 IMU 是惯导递推的必需输入。
+            obj.checkFrameConfig();
+            obj.checkInputFrameMetadata();
             obj.checkTimeData();
             obj.checkImuData();
             obj.checkInitialData();
             obj.checkTruthData();
             obj.checkSensorAvailabilityConfig();
+            obj.checkSensorDelayConfig();
             obj.checkEnabledMeasurements();
         end
 
@@ -130,10 +133,20 @@
 
         %% get IMU data
         function imu = getImu(obj, index)
-            imu = struct();
-            imu.Time = obj.Time(index);
-            imu.Gyro = obj.CurMeas.Imu.Gyro(index, :).';
-            imu.Accel = obj.CurMeas.Imu.Accel(index, :).';
+            imu = obj.emptyMeasurement();
+            sampleIndex = obj.CurMeas.Index.Imu(index);
+            if sampleIndex <= 0
+                return;
+            end
+
+            imu.Time = obj.CurMeas.Imu.Time(sampleIndex);
+            imu.SampleTime = imu.Time;
+            imu.ArrivalTime = obj.Time(index);
+            imu.DelaySteps = obj.getDelaySteps("imu");
+            imu.DelaySeconds = imu.DelaySteps * obj.Cfg.sim.dt;
+            imu.Gyro = obj.CurMeas.Imu.Gyro(sampleIndex, :).';
+            imu.Accel = obj.CurMeas.Imu.Accel(sampleIndex, :).';
+            imu.Valid = true;
         end
 
         %% get DVL measurement
@@ -147,7 +160,7 @@
                 return;
             end
 
-            measurement = obj.buildDvlMeasurement(sampleIndex);
+            measurement = obj.buildDvlMeasurement(sampleIndex, index);
         end
 
         %% get depth measurement
@@ -165,6 +178,10 @@
             % ENU 高度向上为正，深度量测向下为正。
             measurement.Depth = obj.CurMeas.Depth.Depth(sampleIndex);
             measurement.R = obj.Cfg.noise.depth.depthStd^2;
+            measurement.SampleTime = obj.CurMeas.Depth.Time(sampleIndex);
+            measurement.ArrivalTime = obj.Time(index);
+            measurement.DelaySteps = obj.getDelaySteps("depth");
+            measurement.DelaySeconds = measurement.DelaySteps * obj.Cfg.sim.dt;
             measurement.Valid = true;
         end
 
@@ -182,6 +199,10 @@
             measurement.PositionLlh = obj.CurMeas.Gps.PositionLlh(sampleIndex, :).';
             stdVector = obj.expandStd(obj.Cfg.noise.gps.positionStd, 3);
             measurement.R = diag(stdVector.^2);
+            measurement.SampleTime = obj.CurMeas.Gps.Time(sampleIndex);
+            measurement.ArrivalTime = obj.Time(index);
+            measurement.DelaySteps = obj.getDelaySteps("gps");
+            measurement.DelaySeconds = measurement.DelaySteps * obj.Cfg.sim.dt;
             measurement.Valid = true;
         end
 
@@ -192,9 +213,15 @@
                 return;
             end
 
-            truth.PositionLlh = obj.GtMeas.Truth.PositionLlh(index, :).';
-            truth.VelocityEnu = obj.GtMeas.Truth.VelocityEnu(index, :).';
-            truth.Cbn = obj.GtMeas.Truth.AttitudeCbn(:, :, index);
+            if obj.hasPositionTruth()
+                truth.PositionLlh = obj.GtMeas.Truth.PositionLlh(index, :).';
+            end
+            if obj.hasVelocityTruth()
+                truth.VelocityEnu = obj.GtMeas.Truth.VelocityEnu(index, :).';
+            end
+            if obj.hasAttitudeTruth()
+                truth.Cbn = obj.GtMeas.Truth.AttitudeCbn(:, :, index);
+            end
         end
 
         %% get truth arrays
@@ -204,9 +231,25 @@
 
         %% check truth availability
         function tf = hasTruth(obj)
+            tf = obj.hasPositionTruth() || obj.hasVelocityTruth() ...
+                || obj.hasAttitudeTruth();
+        end
+
+        %% check position truth availability
+        function tf = hasPositionTruth(obj)
             tf = isfield(obj.GtMeas, "Truth") ...
-                && ~isempty(obj.GtMeas.Truth.PositionLlh) ...
-                && ~isempty(obj.GtMeas.Truth.VelocityEnu) ...
+                && ~isempty(obj.GtMeas.Truth.PositionLlh);
+        end
+
+        %% check velocity truth availability
+        function tf = hasVelocityTruth(obj)
+            tf = isfield(obj.GtMeas, "Truth") ...
+                && ~isempty(obj.GtMeas.Truth.VelocityEnu);
+        end
+
+        %% check attitude truth availability
+        function tf = hasAttitudeTruth(obj)
+            tf = isfield(obj.GtMeas, "Truth") ...
                 && ~isempty(obj.GtMeas.Truth.AttitudeCbn);
         end
     end
@@ -216,6 +259,7 @@
         function gtMeas = loadAllData(obj, inputData)
             % 数据加载按类型分块，便于后续替换数据生成函数。
             gtMeas = struct();
+            gtMeas.Metadata = obj.getField(inputData, "metadata", struct());
             gtMeas.Time = obj.loadTimeData(inputData);
             gtMeas.Initial = obj.loadInitialData(inputData);
             gtMeas.Truth = obj.loadTruthData(inputData, gtMeas.Time);
@@ -379,10 +423,20 @@
                 return;
             end
 
-            gyroBias = obj.generateConstantBias(obj.Cfg.noise.imu.gyroBiasStd, 3);
-            accelBias = obj.generateConstantBias(obj.Cfg.noise.imu.accelBiasStd, 3);
+            gyroBias = zeros(3, 1);
+            accelBias = zeros(3, 1);
+            [~, stateBlocks] = createInertialStateProfile(obj.Cfg);
+            blockNames = string({stateBlocks.Name});
+            if any(blockNames == "GyroBias")
+                gyroBias = obj.generateConstantBias( ...
+                    obj.Cfg.noise.imu.gyroBiasStd, 3);
+            end
+            if any(blockNames == "AccelBias")
+                accelBias = obj.generateConstantBias( ...
+                    obj.Cfg.noise.imu.accelBiasStd, 3);
+            end
 
-            % 仿真 IMU 误差模型：整段轨迹常值零偏 + 每个采样点独立白噪声。
+            % Profile 包含相应零偏状态时才注入常值零偏；白噪声始终正常加入。
             imu.Gyro = obj.addConstantBias(obj.GtMeas.Imu.Gyro, gyroBias);
             imu.Accel = obj.addConstantBias(obj.GtMeas.Imu.Accel, accelBias);
             imu.Gyro = obj.addNoise(imu.Gyro, obj.Cfg.noise.imu.gyroStd, 3);
@@ -420,12 +474,47 @@
         end
 
         %% build DVL measurement
-        function measurement = buildDvlMeasurement(obj, sampleIndex)
+        function measurement = buildDvlMeasurement(obj, sampleIndex, arrivalIndex)
             measurement = obj.emptyMeasurement();
             measurement.VelocityBody = obj.CurMeas.Dvl.VelocityBody(sampleIndex, :).';
             stdVector = obj.expandStd(obj.Cfg.noise.dvl.velocityStd, 3);
             measurement.R = diag(stdVector.^2);
+            measurement.SampleTime = obj.CurMeas.Dvl.Time(sampleIndex);
+            measurement.ArrivalTime = obj.Time(arrivalIndex);
+            measurement.DelaySteps = obj.getDelaySteps("dvl");
+            measurement.DelaySeconds = measurement.DelaySteps * obj.Cfg.sim.dt;
             measurement.Valid = true;
+        end
+
+        %% check configured coordinate frames
+        function checkFrameConfig(obj)
+            navigationFrame = upper(string(obj.getField( ...
+                obj.Cfg.data, "coordinateFrame", "")));
+            bodyFrame = upper(string(obj.getField(obj.Cfg.data, "bodyFrame", "")));
+            if ~isscalar(navigationFrame) || navigationFrame ~= "ENU"
+                error("StateAndMeasurement:UnsupportedNavigationFrame", ...
+                    "This implementation requires cfg.data.coordinateFrame = ""ENU"".");
+            end
+            if ~isscalar(bodyFrame) || bodyFrame ~= "RFU"
+                error("StateAndMeasurement:UnsupportedBodyFrame", ...
+                    "This implementation requires cfg.data.bodyFrame = ""RFU"".");
+            end
+        end
+
+        %% compare optional input metadata with configured frames
+        function checkInputFrameMetadata(obj)
+            metadata = obj.GtMeas.Metadata;
+            inputNavigationFrame = upper(string(obj.getField( ...
+                metadata, "navigationFrame", "ENU")));
+            inputBodyFrame = upper(string(obj.getField(metadata, "bodyFrame", "RFU")));
+            if ~isscalar(inputNavigationFrame) || inputNavigationFrame ~= "ENU"
+                error("StateAndMeasurement:InputNavigationFrameMismatch", ...
+                    "inputData.metadata.navigationFrame must be ""ENU"".");
+            end
+            if ~isscalar(inputBodyFrame) || inputBodyFrame ~= "RFU"
+                error("StateAndMeasurement:InputBodyFrameMismatch", ...
+                    "inputData.metadata.bodyFrame must be ""RFU"".");
+            end
         end
 
         %% check time data
@@ -493,28 +582,76 @@
             obj.checkTimeIntervalMatrix("gps", obj.getAvailableTime("gps"));
         end
 
+        %% check sensor delay config
+        function checkSensorDelayConfig(obj)
+            delayCfg = obj.getField(obj.Cfg, "sensorDelay", struct());
+            isEnabled = obj.getField(delayCfg, "isEnabled", false);
+            if ~(islogical(isEnabled) && isscalar(isEnabled))
+                error("StateAndMeasurement:InvalidDelaySwitch", ...
+                    "cfg.sensorDelay.isEnabled must be a logical scalar.");
+            end
+
+            sensorNames = ["imu", "dvl", "depth", "gps"];
+            for sensorIndex = 1:numel(sensorNames)
+                sensorName = sensorNames(sensorIndex);
+                sensorCfg = obj.getField(delayCfg, sensorName, struct());
+                delaySteps = obj.getField(sensorCfg, "delaySteps", 0);
+                isValid = isnumeric(delaySteps) && isscalar(delaySteps) ...
+                    && isfinite(delaySteps) && delaySteps >= 0 ...
+                    && delaySteps <= 3 && delaySteps == floor(delaySteps);
+                if ~isValid
+                    error("StateAndMeasurement:InvalidDelaySteps", ...
+                        "%s delaySteps must be an integer from 0 to 3.", sensorName);
+                end
+            end
+        end
+
         %% build measurement index maps
         function indexMap = buildMeasurementIndexMap(obj)
             %BUILDMEASUREMENTINDEXMAP 预先建立主时间轴到异步量测的索引映射。
             numSamples = numel(obj.Time);
             indexMap = struct();
+            indexMap.Imu = zeros(numSamples, 1);
             indexMap.Dvl = zeros(numSamples, 1);
             indexMap.Depth = zeros(numSamples, 1);
             indexMap.Gps = zeros(numSamples, 1);
 
+            indexMap.Imu = obj.buildSensorIndexMap( ...
+                obj.CurMeas.Imu.Time, obj.CurMeas.Imu.Valid, "");
+            indexMap.Imu = obj.applySensorDelay(indexMap.Imu, "imu");
+
             if obj.Cfg.sensor.dvl.isEnabled && ~obj.isDvlMissing()
                 indexMap.Dvl = obj.buildSensorIndexMap( ...
                     obj.CurMeas.Dvl.Time, obj.CurMeas.Dvl.Valid, "dvl");
+                indexMap.Dvl = obj.applySensorDelay(indexMap.Dvl, "dvl");
             end
 
             if obj.Cfg.sensor.depth.isEnabled && ~isempty(obj.CurMeas.Depth.Depth)
                 indexMap.Depth = obj.buildSensorIndexMap( ...
                     obj.CurMeas.Depth.Time, obj.CurMeas.Depth.Valid, "");
+                indexMap.Depth = obj.applySensorDelay(indexMap.Depth, "depth");
             end
 
             if obj.Cfg.sensor.gps.isEnabled && ~isempty(obj.CurMeas.Gps.PositionLlh)
                 indexMap.Gps = obj.buildSensorIndexMap( ...
                     obj.CurMeas.Gps.Time, obj.CurMeas.Gps.Valid, "gps");
+                indexMap.Gps = obj.applySensorDelay(indexMap.Gps, "gps");
+            end
+        end
+
+        %% 将采样时刻索引映射平移到总线到达时刻
+        function arrivalMap = applySensorDelay(obj, sampleMap, sensorName)
+            delaySteps = obj.getDelaySteps(sensorName);
+            arrivalMap = zeros(size(sampleMap));
+            if delaySteps == 0
+                arrivalMap = sampleMap;
+                return;
+            end
+
+            numSamples = numel(sampleMap);
+            if delaySteps < numSamples
+                arrivalMap((delaySteps + 1):numSamples) = ...
+                    sampleMap(1:(numSamples - delaySteps));
             end
         end
 
@@ -592,6 +729,19 @@
         %% check DVL availability
         function tf = isDvlMissing(obj)
             tf = isempty(obj.GtMeas.Dvl.VelocityBody);
+        end
+
+        %% get configured sensor delay steps
+        function delaySteps = getDelaySteps(obj, sensorName)
+            delaySteps = 0;
+            delayCfg = obj.getField(obj.Cfg, "sensorDelay", struct());
+            isEnabled = logical(obj.getField(delayCfg, "isEnabled", false));
+            if ~isEnabled
+                return;
+            end
+
+            sensorCfg = obj.getField(delayCfg, string(sensorName), struct());
+            delaySteps = double(obj.getField(sensorCfg, "delaySteps", 0));
         end
 
         %% get configured available time

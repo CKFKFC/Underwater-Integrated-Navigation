@@ -12,6 +12,7 @@
     end
 
     methods
+        %% 构造结果管理器
         function obj = FilterResults(cfg, meas)
             %FILTERRESULTS 构造结果管理器。
             arguments
@@ -25,10 +26,18 @@
             obj.Error = struct();
         end
 
-        function registerAlgorithm(obj, algorithmName, runs, numSamples)
+        %% 注册算法并预分配结果数组
+        function registerAlgorithm(obj, algorithmName, runs, numSamples, stateModelMetadata)
             %REGISTERALGORITHM 为算法结果预分配数组。
+            if nargin < 5
+                stateModelMetadata = struct();
+            end
+
+            % 状态模型说明与导航数组保存在同一算法结果下，但不参与误差计算。
+            % 即使未来不同算法使用不同维数，也能从各自结果中恢复其状态定义。
             name = char(algorithmName);
             result = struct();
+            result.StateModel = stateModelMetadata;
             result.PositionLlh = nan(numSamples, 3, runs);
             result.VelocityEnu = nan(numSamples, 3, runs);
             result.Euler = nan(numSamples, 3, runs);
@@ -37,6 +46,7 @@
             obj.Data.(name) = result;
         end
 
+        %% 保存单个时刻的导航结果
         function storeNavigation(obj, algorithmName, mc, sampleIndex, navSol, imuBias)
             %STORENAVIGATION 保存一个导航解算结果。
             if nargin < 6
@@ -53,15 +63,19 @@
             obj.Data.(name).AccelBias(sampleIndex, :, mc) = imuBias.AccelBias(:).';
         end
 
+        %% 计算各算法的导航误差和 RMSE
         function computeErrors(obj, meas)
-            %COMPUTEERRORS 在有真值时计算 ENU 误差和 RMSE。
+            %COMPUTEERRORS 按实际提供的参考量分别计算 ENU 误差和 RMSE。
             if ~meas.hasTruth()
                 warning("FilterResults:TruthUnavailable", ...
-                    "Truth trajectory is unavailable. Error and RMSE are not computed.");
+                    "Reference trajectory is unavailable. Error and RMSE are not computed.");
                 return;
             end
 
             truth = meas.getTruthArrays();
+            hasPositionTruth = meas.hasPositionTruth();
+            hasVelocityTruth = meas.hasVelocityTruth();
+            hasAttitudeTruth = meas.hasAttitudeTruth();
             algorithmNames = fieldnames(obj.Data);
             for nameIndex = 1:numel(algorithmNames)
                 name = algorithmNames{nameIndex};
@@ -74,22 +88,34 @@
 
                 for mc = 1:runs
                     for sampleIndex = 1:numSamples
-                        estimatePosition = result.PositionLlh(sampleIndex, :, mc).';
-                        truthPosition = truth.PositionLlh(sampleIndex, :).';
-                        positionError(sampleIndex, :, mc) = llh2enuError(estimatePosition, truthPosition).';
+                        if hasPositionTruth
+                            estimatePosition = result.PositionLlh(sampleIndex, :, mc).';
+                            truthPosition = truth.PositionLlh(sampleIndex, :).';
+                            positionError(sampleIndex, :, mc) = ...
+                                llh2enuError(estimatePosition, truthPosition).';
+                        end
 
-                        estimateVelocity = result.VelocityEnu(sampleIndex, :, mc).';
-                        truthVelocity = truth.VelocityEnu(sampleIndex, :).';
-                        velocityError(sampleIndex, :, mc) = (estimateVelocity - truthVelocity).';
+                        if hasVelocityTruth
+                            estimateVelocity = result.VelocityEnu(sampleIndex, :, mc).';
+                            truthVelocity = truth.VelocityEnu(sampleIndex, :).';
+                            velocityError(sampleIndex, :, mc) = ...
+                                (estimateVelocity - truthVelocity).';
+                        end
 
-                        estimateCbn = dcmFromEuler(result.Euler(sampleIndex, :, mc).');
-                        truthCbn = truth.AttitudeCbn(:, :, sampleIndex);
-                        attitudeError(sampleIndex, :, mc) = obj.computeAttitudeMisalignment( ...
-                            estimateCbn, truthCbn).';
+                        if hasAttitudeTruth
+                            estimateCbn = dcmFromEuler( ...
+                                result.Euler(sampleIndex, :, mc).');
+                            truthCbn = truth.AttitudeCbn(:, :, sampleIndex);
+                            attitudeError(sampleIndex, :, mc) = ...
+                                obj.computeAttitudeMisalignment(estimateCbn, truthCbn).';
+                        end
                     end
                 end
 
                 errorData = struct();
+                errorData.HasPositionTruth = hasPositionTruth;
+                errorData.HasVelocityTruth = hasVelocityTruth;
+                errorData.HasAttitudeTruth = hasAttitudeTruth;
                 errorData.PositionEnu = positionError;
                 errorData.VelocityEnu = velocityError;
                 errorData.AttitudeMisalignment = attitudeError;
@@ -104,6 +130,7 @@
             end
         end
 
+        %% 将结果、误差和配置保存到 MAT 文件
         function saveToMat(obj)
             %SAVETOMAT 保存结果和误差到 data/output。
             outputFolder = obj.Cfg.result.outputFolder;
@@ -120,12 +147,14 @@
     end
 
     methods (Access = private)
+        %% 计算估计姿态相对真值的失准角
         function attitudeError = computeAttitudeMisalignment(~, estimateCbn, truthCbn)
             %COMPUTEATTITUDEMISALIGNMENT 计算估计姿态相对真值姿态的小失准角。
             relativeDcm = estimateCbn * truthCbn.';
             attitudeError = FilterResults.rotationVectorFromDcm(relativeDcm);
         end
 
+        %% 沿 Monte Carlo 维度计算分量 RMSE
         function componentRmse = computeComponentRmse(~, errorData)
             %COMPUTECOMPONENTRMSE 沿 MC 维度计算每个分量的 RMSE。
             componentRmse = sqrt(mean(errorData.^2, 3, "omitnan"));
@@ -133,6 +162,7 @@
     end
 
     methods (Static, Access = private)
+        %% 从方向余弦矩阵提取旋转矢量
         function rotationVector = rotationVectorFromDcm(rotationMatrix)
             %ROTATIONVECTORFROMDCM 从旋转矩阵提取旋转矢量。
             traceArgument = 0.5 * (trace(rotationMatrix) - 1.0);

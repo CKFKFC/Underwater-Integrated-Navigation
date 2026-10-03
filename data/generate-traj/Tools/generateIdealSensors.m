@@ -14,7 +14,7 @@ dvlIndex = makeSensorIndex(numSamples, cfg.SampleInterval, cfg.DvlSampleInterval
 depthIndex = makeSensorIndex(numSamples, cfg.SampleInterval, cfg.DepthSampleInterval);
 gpsIndex = makeSensorIndex(numSamples, cfg.SampleInterval, cfg.GpsSampleInterval);
 
-% DVL 量测使用体坐标系速度，不能直接使用 ENU 速度。
+% DVL 量测使用 RFU 体坐标系速度，不能直接使用 ENU 速度。
 dvlVelocityBody = createDvlVelocityBody( ...
     trajectory.VelocityEnu(dvlIndex, :), trajectory.AttitudeCbn(:, :, dvlIndex));
 

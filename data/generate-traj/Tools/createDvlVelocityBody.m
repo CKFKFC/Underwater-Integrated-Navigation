@@ -1,5 +1,5 @@
 function velocityBody = createDvlVelocityBody(velocityEnu, attitudeCbn)
-%CREATEDVLVELOCITYBODY 将 ENU 速度转换为 DVL 体坐标速度。
+%CREATEDVLVELOCITYBODY 将 ENU 速度转换为 DVL 的 RFU 体坐标速度。
 %   当前项目规定 DVL 量测字段必须是 dvl.velocityBody，而不是 ENU 速度。
 
 numSamples = size(velocityEnu, 1);

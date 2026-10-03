@@ -1,8 +1,8 @@
 ﻿function Cbn = dcmFromEuler(euler)
-%DCMFROMEULER 将滚转俯仰航向角转换为体到 ENU 的 DCM。
+%DCMFROMEULER 将 RFU 欧拉角转换为体到 ENU 的 DCM。
 % 作者: Kefan Chen
 % 日期: 2026-07-04
-% 功能: 按 ZYX 航向-俯仰-滚转顺序构造 C_b_n。
+% 功能: b 系为右前上，n 系为东北天；航向北零顺时针，抬头和右倾为正。
 
 euler = euler(:);
 roll = euler(1);
@@ -16,23 +16,23 @@ sp = sin(pitch);
 cy = cos(yaw);
 sy = sin(yaw);
 
-Rx = [
+pitchAboutRight = [
     1.0, 0.0, 0.0
-    0.0, cr, -sr
-    0.0, sr, cr
+    0.0, cp, -sp
+    0.0, sp, cp
     ];
-Ry = [
-    cp, 0.0, sp
+rollAboutForward = [
+    cr, 0.0, sr
     0.0, 1.0, 0.0
-    -sp, 0.0, cp
+    -sr, 0.0, cr
     ];
-Rz = [
-    cy, -sy, 0.0
-    sy, cy, 0.0
+headingAboutUp = [
+    cy, sy, 0.0
+    -sy, cy, 0.0
     0.0, 0.0, 1.0
     ];
 
-Cbn = Rz * Ry * Rx;
+Cbn = headingAboutUp * pitchAboutRight * rollAboutForward;
 
 end
 
