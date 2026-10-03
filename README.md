@@ -1,12 +1,24 @@
-<<<<<<< HEAD
-# 代码阅读与使用说明
-
-本文围绕当前源码，说明如何运行导航程序、准备输入、选择配置、阅读滤波流程以及解释输出。入口是同目录的 `main.m`。
-=======
 # Underwater-Integrated-Navigation
 
-面向水下载体的惯性基组合导航 MATLAB 代码仓库。本仓库用于开发、维护和验证捷联惯性导航、误差状态卡尔曼滤波、多传感器量测融合及传感器延时补偿等相关算法。
->>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
+## 水下组合导航代码阅读与使用说明
+
+基于 MATLAB 的水下惯性组合导航程序，包含捷联惯导、误差状态卡尔曼滤波（ESKF）、多传感器融合及固定延时补偿。本文说明代码阅读顺序、数据准备、运行配置和结果解读，程序入口为 [main.m](main.m)。
+
+> **首次运行：** 仓库不附带 MAT 数据文件。请先按第 2 节生成 **3600 s 直线轨迹**，再运行主程序。
+
+### 目录
+
+- [1. 从哪里开始读](#reading)
+- [2. 运行一次程序](#running)
+- [3. 坐标系、单位与输入格式](#input)
+- [4. 常用配置如何影响运行](#configuration)
+- [5. 主程序与数据流](#workflow)
+- [6. 一个无延时时间步做了什么](#filter-step)
+- [7. 异步量测与固定延时](#sensor-delay)
+- [8. 读取结果与理解图形](#results)
+- [9. 常见使用问题](#faq)
+
+<a id="reading"></a>
 
 ## 1. 从哪里开始读
 
@@ -14,17 +26,20 @@
 
 | 文件 | 阅读重点 |
 | --- | --- |
-| `main.m` | 一次完整运行如何串起配置、量测、滤波、保存与绘图 |
-| `config/setConfig.m` | 输入文件、运行时长、传感器开关、噪声与状态模型 |
-| `measurement/StateAndMeasurement.m` | MAT 字段读取、初值获取、加噪、异步量测匹配 |
-| `algorithm/ESKF.m` | Monte Carlo 外循环与时间内循环，以及量测更新顺序 |
-| `tools/insUpdateENU.m` | IMU 如何递推姿态、速度和位置 |
-| `state_model/InertialErrorStateModel.m` | 误差状态含义、动力学、量测残差和反馈符号 |
-| `algorithm/ErrorStateKF.m` | 卡尔曼预测、串行量测更新、协方差与误差状态清零 |
-| `sensor_delay/SensorDelayCompensator.m` | 开启固定延时后，状态如何前推或回推 |
-| `result/FilterResults.m`、`result/ResultPlotter.m` | 结果数组、误差定义、RMSE 和图形内容 |
+| [main.m](main.m) | 一次完整运行如何串起配置、量测、滤波、保存与绘图 |
+| [setConfig.m](config/setConfig.m) | 输入文件、运行时长、传感器开关、噪声与状态模型 |
+| [StateAndMeasurement.m](measurement/StateAndMeasurement.m) | MAT 字段读取、初值获取、加噪、异步量测匹配 |
+| [ESKF.m](algorithm/ESKF.m) | Monte Carlo 外循环与时间内循环，以及量测更新顺序 |
+| [insUpdateENU.m](tools/insUpdateENU.m) | IMU 如何递推姿态、速度和位置 |
+| [InertialErrorStateModel.m](state_model/InertialErrorStateModel.m) | 误差状态含义、动力学、量测残差和反馈符号 |
+| [ErrorStateKF.m](algorithm/ErrorStateKF.m) | 卡尔曼预测、串行量测更新、协方差与误差状态清零 |
+| [SensorDelayCompensator.m](sensor_delay/SensorDelayCompensator.m) | 开启固定延时后，状态如何前推或回推 |
+| [FilterResults.m](result/FilterResults.m) | 结果数组、误差定义和 RMSE |
+| [ResultPlotter.m](result/ResultPlotter.m) | 轨迹、误差和位置分量图 |
 
 辅助文件中，`createInertialStateProfile.m` 选择状态块组合，`createInertialStateBlock.m` 读取各块的初始标准差，`buildStateLayout.m` 分配索引。它们共同决定实际使用的状态向量。
+
+<a id="running"></a>
 
 ## 2. 运行一次程序
 
@@ -32,36 +47,7 @@ GitHub 仓库不附带任何 MAT 文件，包括仿真轨迹、实测输入和�
 
 ### 2.1 第一步：在本地生成仿真轨迹
 
-<<<<<<< HEAD
 在 MATLAB 中将当前文件夹切换到含 `main.m` 的项目主目录，然后在命令窗口执行：
-=======
-具体 MATLAB 工具箱需求会随着算法模块逐步明确。若某个脚本依赖特定工具箱，请在脚本注释或对应文档中说明。
-
-## 快速开始
-
-第一次获取代码：
-
-```powershell
-git clone https://github.com/CKFKFC/Underwater-Integrated-Navigation.git
-cd Underwater-Integrated-Navigation
-code .
-```
-
-开始开发前同步主分支：
-
-```powershell
-git switch main
-git pull
-```
-
-为自己的任务创建分支：
-
-```powershell
-git switch -c feature/姓名-任务简述
-```
-
-在 MATLAB 中建议从仓库根目录运行：
->>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
 
 ```matlab
 addpath(genpath(pwd));
@@ -69,64 +55,7 @@ genetraj(TrajectoryType="straight", Duration=3600.0, SampleInterval=0.01, ...
     OutputFile="data/input/navigation_input_straight_auv_3600s.mat");
 ```
 
-<<<<<<< HEAD
 该命令生成 3600 s 的直线轨迹，并保存到项目下的 `data/input/navigation_input_straight_auv_3600s.mat`，与主程序默认输入路径一致。输出文件夹不存在时会自动创建。文件包含导航初值、真值以及理想 IMU、DVL、深度和 GPS 数据，可直接作为本项目的仿真输入。
-=======
-## 坐标系与欧拉角约定
-
-- 导航系 `n`：ENU `[east, north, up]`（东北天）。
-- 载体系 `b`：RFU `[right, forward, up]`（右前上）。
-- `Cbn`：把 RFU 载体系向量转换到 ENU 导航系，即 `vEnu = Cbn * vBody`。
-- 欧拉角顺序：`[roll, pitch, yaw]`。右侧下沉为正滚转，抬头为正俯仰；
-  航向以北为零，顺时针转向东为正。
-- 零欧拉角时 `Cbn = eye(3)`，此时右/前/上分别与东/北/天重合。
-
-输入 MAT 文件中的 `imu.gyro`、`imu.accel` 和 `dvl.velocityBody` 必须按
-RFU 列顺序保存。若只提供欧拉角，`initial.attitudeEuler` 和
-`truth.attitudeEuler` 也必须遵守上述定义。
-
-## 误差状态模型切换
-
-ESKF 的状态维数由 `config/setConfig.m` 中一个参数选择：
-
-```matlab
-cfg.algorithm.stateModel.profile = "ins9";  % 9维：姿态、速度、位置误差
-cfg.algorithm.stateModel.profile = "ins15"; % 15维：ins9 + 陀螺/加速度计零偏
-```
-
-IMU 常值零偏是否注入直接由 profile 的状态块决定：包含 `GyroBias` 时注入
-陀螺零偏，包含 `AccelBias` 时注入加速度计零偏。新增 profile 只需定义状态块，
-无需增加与维数名称绑定的零偏开关。
-
-程序会根据 profile 自动生成状态索引、初始协方差、系统矩阵和量测矩阵，
-并在 `results.Data.ESKF.StateModel` 中记录实际使用的状态块与索引。新增状态时，
-应在 `state_model` 中定义状态块及其 profile 组合，再在
-`InertialErrorStateModel` 中实现该状态与动力学、量测和反馈之间的耦合；
-`ErrorStateKF` 的通用卡尔曼运算无需修改。
-
-名义初值随机扰动与滤波初始协方差已经独立配置：
-
-```matlab
-cfg.algorithm.initialPerturbation   % 是否/如何扰动输入的名义初值
-cfg.algorithm.initialCovariance     % P0 各状态的 1 sigma 标准差
-```
-
-实测模式默认关闭 `initialPerturbation.isEnabled` 和传感器噪声叠加，但
-`initialCovariance` 仍用于生成 `P0`。`cfg.noise` 中的 IMU 噪声密度与外部量测
-标准差仍决定滤波器的 `Q/R`，应填写实测标定值，而不是全部置零。
-
-参考数据可以只提供 `truth.positionLlh`（例如 RTK 纬经高）。此时程序只计算
-ENU 位置误差和位置 RMSE，不要求额外提供速度或姿态真值。
-
-与功能职责相关的主要目录如下：
-
-- `algorithm`：ESKF 主流程和通用卡尔曼滤波数值核心。
-- `state_model`：误差状态 profile、状态块、索引布局及惯导误差模型。
-- `sensor_delay`：传感器总线延时所需的状态前推和回推补偿。
-- `measurement`：传感器采样数据与到达时刻的组织。
-
-## 协作流程
->>>>>>> 1446638d2eea13c0ad0621ccd4f0b11149031fad
 
 可在命令窗口确认文件已经生成：
 
@@ -165,7 +94,7 @@ main
 | 配置 | 当前默认值 | 含义 |
 | --- | --- | --- |
 | `cfg.data.mode` | `"simulation"` | 对输入量测进行仿真加噪 |
-| `cfg.data.file` | `data/input/navigation_input_straight_auv_3600s.mat` | 默认路径，仓库不附带此文件；按第 2.1 节自行生成 |
+| `cfg.data.file` | 第 2.1 节生成的直线轨迹文件 | 路径见上方示例，需自行生成 |
 | `cfg.sim.dt` | `0.01` s | 主采样周期，影响噪声换算、时间容差和固定延时 |
 | `cfg.sim.runs` | `20` | Monte Carlo 次数 |
 | `cfg.sim.duration` | `inf` | 使用完整输入时段 |
@@ -174,7 +103,7 @@ main
 | `cfg.sensorDelay.isEnabled` | `false` | 量测不附加总线延时 |
 | `cfg.result.fileName` | `"eskf_results.mat"` | 保存文件名 |
 
-**当前默认运行的是纯惯导传播。** 虽然进入 `ESKF` 流程并预测协方差，但没有外部量测更新，不会自动获得组合导航校正。需要融合时，开启相应传感器并提供对应输入数据。IMU 是必需输入，不能靠将 `cfg.sensor.imu.isEnabled` 改为 `false` 来运行无 IMU 的模式。
+> **注意：当前默认运行的是纯惯导传播。** 虽然进入 `ESKF` 流程并预测协方差，但没有外部量测更新，不会自动获得组合导航校正。需要融合时，开启相应传感器并提供对应输入数据。IMU 是必需输入，不能靠将 `cfg.sensor.imu.isEnabled` 改为 `false` 来运行无 IMU 的模式。
 
 运行结束后，工作区保留 `cfg`、`meas`、`results` 和 `plotter` 等变量。结果默认写入 `data/output/eskf_results.mat`；再次使用同一文件名运行会覆盖旧结果。
 
@@ -202,6 +131,8 @@ genetraj(TrajectoryType="lawnmower", Duration=3600.0, SampleInterval=0.01, ...
 实测模式仍使用 `cfg.noise` 构造滤波器的 `Q/R`，仍使用 `initialCovariance` 构造 `P0`。这些参数应描述传感器和初值的不确定度，不能因为“不加人工噪声”就全部清零。
 
 若只有 RTK 位置参考，可只提供 `truth.positionLlh`；但初始速度和姿态仍须通过 `initial` 提供。`truth` 用于初值回退和结果评估，不会自动作为 GPS 量测参与融合；要融合位置数据，应另外提供 `gps.positionLlh` 并开启 GPS。
+
+<a id="input"></a>
 
 ## 3. 坐标系、单位与输入格式
 
@@ -262,6 +193,8 @@ genetraj(TrajectoryType="lawnmower", Duration=3600.0, SampleInterval=0.01, ...
 
 该函数把 PSINS IMU 增量除以采样间隔，转换为本程序使用的角速度和比力，并把源姿态 `[pitch, roll, yaw]` 转为本项目的 `[roll, pitch, -yaw]`。它在时间轴前补入初始状态，并保留源 `trj`。输出中的 DVL、深度和 GPS 块为空，不能仅开启开关就获得这些量测。
 
+<a id="configuration"></a>
+
 ## 4. 常用配置如何影响运行
 
 ### 4.1 时段、传感器与随机数
@@ -309,6 +242,8 @@ IMU 工程参数在 `setConfig.m` 中转换为 SI 单位：陀螺常值零偏用
 
 仿真加噪也受模型选择影响：只有包含相应零偏状态块时，才注入该传感器的随机常值零偏；白噪声仍照常加入。因此当前代码中切换 `ins9` / `ins15` 同时改变了滤波状态和仿真零偏注入条件。常值零偏每次 Monte Carlo 重新抽取，单次运行内保持不变；当前过程噪声没有额外的零偏随机游走驱动项。
 
+<a id="workflow"></a>
+
 ## 5. 主程序与数据流
 
 ```text
@@ -338,6 +273,8 @@ main.m
 
 输入字段通常以小写开头，例如 `positionLlh`；读入后的对象字段通常以大写开头，例如 `PositionLlh`。查找某个量时需要区分这两套命名。
 
+<a id="filter-step"></a>
+
 ## 6. 一个无延时时间步做了什么
 
 `ESKF.m` 外层循环遍历 MC，内层从第 2 个主时间样本开始。第 1 帧保存初始导航解，无延时分支不会用第 1 行 IMU 做递推。
@@ -362,6 +299,8 @@ main.m
 
 `KalmanUpdate` 使用 `innovation = residual - H*CurX`，扣除本时刻前序量测已经估计出的部分；协方差采用 Joseph 形式更新并对称化。清零误差均值是为了避免下一步重复反馈，不表示不确定度归零。
 
+<a id="sensor-delay"></a>
+
 ## 7. 异步量测与固定延时
 
 ### 7.1 量测何时进入滤波
@@ -379,6 +318,8 @@ main.m
 `ESKF` 维护一个滞后导航解 `laggedNavSol`，收到 IMU 后按其采样间隔传播，再由 `forwardImu` 一阶外推位置、速度到当前计算时刻。DVL 更新回推速度，深度更新回推高度，GPS 更新回推位置和速度；这些临时状态用于构造对应采样时刻的残差。
 
 当前实现不外推或回推姿态，也不保存完整历史协方差进行重放。它是针对短固定延时的一阶补偿，不能等同于任意大延时、变化延时或乱序量测处理。反馈时同一导航修正还会应用到滞后状态，使后续传播保留本步修正。
+
+<a id="results"></a>
 
 ## 8. 读取结果与理解图形
 
@@ -422,7 +363,9 @@ stateModelInfo = savedResults.resultData.ESKF.StateModel;
 
 | `errorData.ESKF` 字段 | 含义 |
 | --- | --- |
-| `HasPositionTruth` / `HasVelocityTruth` / `HasAttitudeTruth` | 对应参考量是否存在 |
+| `HasPositionTruth` | 是否存在位置参考 |
+| `HasVelocityTruth` | 是否存在速度参考 |
+| `HasAttitudeTruth` | 是否存在姿态参考 |
 | `PositionEnu` | 估计位置相对真值的 ENU 误差，m，`N×3×runs` |
 | `VelocityEnu` | 估计速度减真值，m/s，`N×3×runs` |
 | `AttitudeMisalignment` | 由 `C_est * C_truth'` 提取的 ENU 旋转矢量，rad，`N×3×runs` |
@@ -444,6 +387,8 @@ stateModelInfo = savedResults.resultData.ESKF.StateModel;
 
 这些绘图调用只创建图窗，主程序没有自动保存 PNG 或 FIG 的步骤。需要检查带符号的单轮误差时，应读取 `results.Error.ESKF.PositionEnu(:, :, 1)` 等原始误差数组。
 
+<a id="faq"></a>
+
 ## 9. 常见使用问题
 
 | 现象 | 对照检查 |
@@ -459,4 +404,3 @@ stateModelInfo = savedResults.resultData.ESKF.StateModel;
 | 无速度或姿态误差图 | 检查是否提供了该类真值；位置参考不等于完整导航真值 |
 | 运行时间或结果体积过大 | 先缩短 `cfg.sim.duration`、减少 `cfg.sim.runs`；结果数组随样本数和运行次数增长 |
 | 重复运行结果不同 | 检查 `randomselect`、`randstates.mat`、输入和配置是否保持一致 |
-
