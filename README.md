@@ -203,6 +203,7 @@ genetraj(TrajectoryType="lawnmower", Duration=3600.0, SampleInterval=0.01, ...
 | --- | --- |
 | `cfg.sim.duration` | 正数表示从输入首时刻起保留指定秒数，截断有约半个主采样周期的容差；`inf` 或 `[]` 表示完整输入。至少需要保留两个主时间样本 |
 | `cfg.sensor.dvl.isEnabled` | 开启后融合 RFU 速度 |
+| `cfg.sensor.dvl.leverArmBody` | INS 安装点指向 DVL 安装点的矢量，在 INS RFU 三轴下表达，`[右; 前; 上]`，单位 m；默认零 |
 | `cfg.sensor.depth.isEnabled` | 开启后融合深度，预测值为水面参考高度减当前高度 |
 | `cfg.sensor.gps.isEnabled` | 开启后融合位置；输入虽为纬经高，残差与噪声协方差均以 ENU 米制表示 |
 | `cfg.sensor.dvl.availableTime` | 每行一个闭区间 `[开始, 结束]`，仅允许这些时段的量测 |
@@ -291,11 +292,63 @@ main.m
 
 | 量测 | 预测量 / 残差 | 直接进入量测矩阵的状态 |
 | --- | --- | --- |
-| DVL | 预测 RFU 速度为 `Cbn' * VelocityEnu`；残差为实测减预测 | 姿态、速度 |
+| DVL | 预测 RFU 速度为 `Cbn' * VelocityEnu + cross(correctedImu.Gyro, leverArmBody)`；残差为实测减预测 | 姿态、速度；非零杆臂时还包括 `ins15` 的陀螺零偏 |
 | 深度 | 预测深度为 `surfaceAltitude - height`；残差为实测减预测 | 位置的天向分量，系数为 `-1` |
 | GPS | `llh2enuError(实测位置, 当前导航位置)` 得到米制 ENU 残差 | ENU 位置 |
 
 误差状态代表“真值相对当前导航解的修正量”，所以反馈采用加性修正。评估误差则是“估计减真值”，两者符号含义不同。
+
+### 6.2 DVL 已知安装杆臂
+
+在 `config/setConfig.m` 中填写 `cfg.sensor.dvl.leverArmBody`，并开启 DVL。例如
+`[0.2; 1.0; -0.3]` 表示 DVL 位于 INS 右侧 0.2 m、前方 1 m、下方 0.3 m。
+安装角仍假设为零，杆臂是已知常量，不新增滤波状态；导航输出仍属于 INS 安装点。
+输入 `dvl.velocityBody` 应为 DVL 安装点的对地速度，以 INS RFU 表达。
+若设备已经把速度补偿到 INS 安装点，应设置零杆臂，避免重复补偿。
+
+杆臂速度使用零偏补偿后的 `correctedImu.Gyro`，即 `omega_ib^b`，近似代替
+`omega_eb^b`。仅此处忽略地球自转；1 m 杆臂引入的最大速度近似误差约为
+0.073 mm/s。机械编排和误差状态传播仍保留地球自转。该近似下，DVL 雅可比为
+`H_attitude = Cbn' * skew(VelocityEnu)`、`H_velocity = Cbn'`，位置和加速度计零偏块为零；
+`ins15` 另有 `H_gyroBias = skew(leverArmBody)`。
+
+非零杆臂时，`BuildDvlMeasurement` / `UpdateDvl` 需要额外的 `correctedImu` 输入。
+量测协方差加入 `skew(l) * diag(gyroStd.^2) * skew(l)'`，使用离散角速度白噪声标准差；
+当前标准 KF 仍忽略共用 IMU 导致的过程/量测噪声相关性。零杆臂保留原残差、H、R 和调用方式。
+
+仿真时，在 `data/generate-traj/Tools/setTrajectoryOptions.m` 中设置真值
+`DvlLeverArmBody` 并重新运行 `genetraj`；旧 MAT 数据不会自动获得杆臂速度。
+生成器采用真实对地角速度 `omega_eb^b` 生成 DVL 安装点速度，因而也可以检验滤波中忽略
+地球自转的近似。真值杆臂保存在 `inputData.metadata.dvlLeverArmBody`；滤波杆臂保存在
+结果 `StateModel.DvlLeverArmBody`。两者分别配置，正常补偿试验应取相同值。
+
+### 6.3 对比补偿与不补偿
+
+独立实验入口不会修改当前配置或已有输入文件：
+
+```matlab
+addpath(genpath(pwd));
+report = compareDvlLeverArm(Duration=120, Runs=5);
+% 也可明确指定试验杆臂，例如：
+% report = compareDvlLeverArm(LeverArmBody=[1; 0; 0], Duration=120, Runs=5);
+```
+
+默认采用当前 `setConfig()` 的杆臂、状态 profile 和噪声参数；试验统一关闭总线延时、
+GPS 和深度量测，只融合 DVL。生成 2 m/s 的平直航行与割草机轨迹，后者直线段 40 m、
+转弯半径 10 m。每种轨迹比较 A：零杆臂数据/零补偿，B：非零杆臂数据/零补偿，
+C：与 B 相同的数据/正确杆臂补偿。无噪声试验用精确初值，含噪声试验重置相同种子进行配对 MC。
+因此 B/C 的传感器数据与初值扰动相同，不应通过分别更改生成器杆臂来比较“补偿开关”。
+
+每次运行在 `data/output/dvl_lever_arm_时间戳/` 保存 4 张对比图、`summary.csv`、
+完整 `comparison.mat` 及两种轨迹的零/非零杆臂输入。表格 RMSE 的定义是先对三轴误差平方求和，
+再对时间和 MC 平均后开方；图中曲线是在每个时刻跨 MC 的三维 RMSE。轨迹图只展示第 1 轮。
+同时绘制 DVL 杆臂速度及真值状态下补偿后的量测残差；后者不等于闭环滤波新息，
+可用于检查模型是否遗漏了转动速度，避免滤波器把模型错误吸收到速度、姿态或零偏中后掩盖问题。
+补偿后的残差通常保留忽略地球自转造成的小量，不应要求严格为零。
+
+仅改变滤波杆臂不会给旧 MAT 数据添加真实杆臂效应。应先检查数据生成配置和
+`inputData.metadata.dvlLeverArmBody`；对已有理想数据，也可检查
+`dvl.velocityBody - Cbn' * truth.velocityEnu` 是否包含预期的角速度叉乘项。
 
 `KalmanUpdate` 使用 `innovation = residual - H*CurX`，扣除本时刻前序量测已经估计出的部分；协方差采用 Joseph 形式更新并对称化。清零误差均值是为了避免下一步重复反馈，不表示不确定度归零。
 
@@ -317,7 +370,12 @@ main.m
 
 `ESKF` 维护一个滞后导航解 `laggedNavSol`，收到 IMU 后按其采样间隔传播，再由 `forwardImu` 一阶外推位置、速度到当前计算时刻。DVL 更新回推速度，深度更新回推高度，GPS 更新回推位置和速度；这些临时状态用于构造对应采样时刻的残差。
 
-当前实现不外推或回推姿态，也不保存完整历史协方差进行重放。它是针对短固定延时的一阶补偿，不能等同于任意大延时、变化延时或乱序量测处理。反馈时同一导航修正还会应用到滞后状态，使后续传播保留本步修正。
+非零 DVL 杆臂时，临时 DVL 姿态按 `dvl.SampleTime - imu.SampleTime` 从滞后姿态推算，
+姿态传播仍考虑地球自转和运输角速度。角速度使用最新已到达的 IMU 值作短时保持，
+不访问尚未到达的数据；默认 IMU 延时 30 ms、DVL 延时 20 ms 时，需要约 10 ms 的外推。
+零杆臂保留原有不推算姿态的行为。上述处理未重放历史协方差，也未对临时状态额外映射
+完整延时雅可比，是短固定延时的一阶近似，不能等同于任意大延时、快速角加速度或乱序量测处理。
+反馈时同一导航修正还会应用到滞后状态，使后续传播保留本步修正。
 
 <a id="results"></a>
 

@@ -10,7 +10,7 @@ clc;
 addpath(genpath(pwd));
 
 % 控制随机数，便于复现实验。
-randomselect = 'random'; % 'random' or 'repeatlast'
+randomselect = 'repeatlast'; % 'random' or 'repeatlast'
 ControlRandomNumber(randomselect);
 
 % 读取全局配置。仿真时长可在 cfg.sim.duration 中设置。
@@ -47,3 +47,5 @@ plotter.plotVelocityError();
 plotter.plotAttitudeError();
 plotter.plotRmse();
 plotter.plotPositionComponents();
+plotter.plotAttitude();
+plotter.plotVelocity();

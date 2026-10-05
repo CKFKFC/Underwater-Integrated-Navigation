@@ -22,6 +22,13 @@ classdef InertialErrorStateModel
             % Profile 只决定“包含哪些状态块及其顺序”；全局索引由布局生成器
             % 统一分配，后续动力学、量测和反馈均通过 Layout 按名称取索引。
             [obj.ProfileName, obj.Blocks] = createInertialStateProfile(cfg);
+            leverArm = cfg.sensor.dvl.leverArmBody;
+            if ~isnumeric(leverArm) || ~isreal(leverArm) || ~isvector(leverArm) ...
+                    || numel(leverArm) ~= 3 || any(~isfinite(leverArm(:)))
+                error("InertialErrorStateModel:InvalidDvlLeverArm", ...
+                    "cfg.sensor.dvl.leverArmBody must be a finite real three-element vector in metres.");
+            end
+            cfg.sensor.dvl.leverArmBody = double(leverArm(:));
             obj.Cfg = cfg;
             obj.Layout = buildStateLayout(obj.Blocks);
             obj.InitialPerturbationEnabled = ...
@@ -116,18 +123,46 @@ classdef InertialErrorStateModel
         end
 
         %% 构建 DVL 速度量测模型
-        function [residual, H, R] = BuildDvlMeasurement(obj, navSol, measurement)
+        function [residual, H, R] = BuildDvlMeasurement(obj, navSol, measurement, correctedImu)
             %BUILDDVLMEASUREMENT 生成 RFU 体坐标系 DVL 速度量测模型。
-            %   残差统一采用 z-h(x)。线性化 Cnb*v 后，姿态误差和 ENU 速度
-            %   误差进入 H；当前未参与该量测的可选状态列保持为零。
+            %   h=Cnb*v+omega_ib^b×leverArmBody，残差为 z-h。
+            %   杆臂速度用零偏补偿后的 omega_ib^b 近似 omega_eb^b；仅在此处
+            %   忽略地球自转。已知杆臂不增加状态，导航解仍属于 INS 安装点。
+            arguments
+                obj
+                navSol struct
+                measurement struct
+                correctedImu struct = struct()
+            end
             Cnb = navSol.Cbn.';
             predictedVelocityBody = Cnb * navSol.VelocityEnu;
-            residual = measurement.VelocityBody - predictedVelocityBody;
-
             H = zeros(3, obj.Layout.Dimension);
             H(:, obj.Layout.Index.Attitude) = Cnb * skew(navSol.VelocityEnu);
             H(:, obj.Layout.Index.Velocity) = Cnb;
             R = measurement.R;
+
+            leverArmBody = obj.Cfg.sensor.dvl.leverArmBody;
+            if any(leverArmBody ~= 0.0)
+                if ~isfield(correctedImu, "Gyro")
+                    error("InertialErrorStateModel:MissingDvlGyro", ...
+                        "A nonzero DVL lever arm requires bias-corrected IMU angular rate.");
+                end
+                validateattributes(correctedImu.Gyro, {'numeric'}, ...
+                    {'real', 'finite', 'vector', 'numel', 3});
+                predictedVelocityBody = predictedVelocityBody ...
+                    + cross(correctedImu.Gyro(:), leverArmBody);
+                leverArmSkew = skew(leverArmBody);
+                if obj.HasState("GyroBias")
+                    % d[(omega_meas-bg)×l]/d(bg) = +[l]×。
+                    H(:, obj.Layout.Index.GyroBias) = leverArmSkew;
+                end
+
+                % gyroStd 是离散角速度标准差，不是连续噪声密度。
+                % 与预测共用 IMU 的过程/量测噪声相关性在当前标准 KF 中忽略。
+                gyroStd = InertialErrorStateModel.ExpandStd(obj.Cfg.noise.imu.gyroStd, 3);
+                R = R + leverArmSkew * diag(gyroStd.^2) * leverArmSkew.';
+            end
+            residual = measurement.VelocityBody(:) - predictedVelocityBody;
         end
 
         %% 构建深度量测模型
@@ -207,6 +242,8 @@ classdef InertialErrorStateModel
             metadata.Index = obj.Layout.Index;
             metadata.BodyFrame = "RFU";
             metadata.NavigationFrame = "ENU";
+            metadata.DvlLeverArmBody = obj.Cfg.sensor.dvl.leverArmBody;
+            metadata.DvlLeverArmRate = "omega_ib_b (Earth rotation neglected)";
             metadata.InitialPerturbationEnabled = obj.InitialPerturbationEnabled;
             metadata.InitialPerturbationStd = obj.InitialPerturbationStd;
             metadata.InitialCovarianceStd = obj.InitialCovarianceStd;

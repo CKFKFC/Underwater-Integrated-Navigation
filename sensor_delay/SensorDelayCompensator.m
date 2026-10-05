@@ -37,18 +37,36 @@ classdef SensorDelayCompensator
             navSol.VelocityEnu = currentVelocity - accelerationEnu * delaySeconds;
         end
 
-        function navSol = backPropagateVelocity(navSol, correctedImu, delaySeconds)
-            %BACKPROPAGATEVELOCITY 仅回推速度，供 DVL 历史量测构造新息。
+        function navSol = backPropagateVelocity(navSol, correctedImu, delaySeconds, attitudeDeltaTime)
+            %BACKPROPAGATEVELOCITY 回推速度，并可将姿态对齐到 DVL 采样时刻。
+            %   attitudeDeltaTime 为 DVL 采样时刻减当前姿态所属的 IMU 采样时刻，
+            %   可正可负。默认零保留旧行为；角速度采用最新已到达值作短时保持。
             arguments
                 navSol struct
                 correctedImu struct
                 delaySeconds (1, 1) double {mustBeNonnegative, mustBeFinite}
+                attitudeDeltaTime (1, 1) double {mustBeFinite} = 0.0
             end
 
             accelerationEnu = SensorDelayCompensator.navigationAcceleration( ...
                 navSol, correctedImu);
             navSol.VelocityEnu = navSol.VelocityEnu(:) ...
                 - accelerationEnu * delaySeconds;
+            if attitudeDeltaTime ~= 0.0
+                % 姿态传播仍保留地球自转和运输角速度；忽略地球自转的近似
+                % 仅用于 DVL 杆臂叉乘，不用于惯导姿态传播。
+                latitude = navSol.PositionLlh(1);
+                altitude = navSol.PositionLlh(3);
+                [RM, RN] = earthRadii(latitude);
+                constants = getWgs84Constants();
+                velocityEnu = navSol.VelocityEnu;
+                wInN = constants.wie * [0.0; cos(latitude); sin(latitude)] ...
+                    + [-velocityEnu(2) / (RM + altitude); ...
+                    velocityEnu(1) / (RN + altitude); ...
+                    velocityEnu(1) * tan(latitude) / (RN + altitude)];
+                navSol.Cbn = expm(-skew(wInN) * attitudeDeltaTime) * navSol.Cbn ...
+                    * expm(skew(correctedImu.Gyro(:)) * attitudeDeltaTime);
+            end
         end
 
         function navSol = backPropagateHeight(navSol, delaySeconds)

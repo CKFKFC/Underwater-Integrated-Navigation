@@ -64,6 +64,7 @@ classdef ConfigurableEskfIntegrationTest < matlab.unittest.TestCase
             cfg.data.file = inputFile;
             cfg.data.isSensorNoiseMonteCarlo = false;
             cfg.sensor.dvl.isEnabled = true;
+            cfg.sensor.dvl.leverArmBody = zeros(3, 1);
             cfg.sensor.depth.isEnabled = false;
             cfg.sensor.gps.isEnabled = false;
             cfg.sensorDelay.isEnabled = false;

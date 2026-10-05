@@ -64,6 +64,25 @@
             title("真实轨迹与算法轨迹二维对比");
         end
 
+        function plotAttitude(obj)
+            %PLOTATTITUDE 绘制第1次运行的滚转、俯仰和航向欧拉角，单位 deg。
+            % 沿用 eulerFromDcm 约定：航向北零顺时针，抬头和右倾为正。
+            arguments
+                obj ResultPlotter
+            end
+            obj.plotNavigationComponents("Euler", ["滚转角", "俯仰角", "航向角"], ...
+                "deg", "Estimated Euler Attitude");
+        end
+
+        function plotVelocity(obj)
+            %PLOTVELOCITY 绘制第1次运行的 ENU 速度，单位 m/s。
+            arguments
+                obj ResultPlotter
+            end
+            obj.plotNavigationComponents("VelocityEnu", ["东向速度", "北向速度", "天向速度"], ...
+                "m/s", "Estimated ENU Velocity");
+        end
+
         function plotPositionError(obj)
             %PLOTPOSITIONERROR 绘制 ENU 位置误差的 MC 平均 RMSE。
             if ~obj.Meas.hasPositionTruth()
@@ -256,6 +275,45 @@
                 end
             end
             sgtitle("真实 ENU 位置");
+        end
+    end
+
+    methods (Access = private)
+        function plotNavigationComponents(obj, fieldName, componentNames, unit, figureName)
+            %PLOTNAVIGATIONCOMPONENTS 绘制解算值，不依赖真值是否存在。
+            algorithmNames = fieldnames(obj.Results.Data);
+            if isempty(algorithmNames)
+                return;
+            end
+
+            time = obj.Meas.getTime();
+            plotFigure = figure(Name=figureName);
+            layout = tiledlayout(plotFigure, 3, 1);
+            componentAxes = gobjects(3, 1);
+            for componentIndex = 1:3
+                componentAxes(componentIndex) = nexttile(layout);
+                axesHandle = componentAxes(componentIndex);
+                hold(axesHandle, "on");
+                grid(axesHandle, "on");
+                for nameIndex = 1:numel(algorithmNames)
+                    name = algorithmNames{nameIndex};
+                    values = obj.Results.Data.(name).(fieldName)(:, componentIndex, 1);
+                    if fieldName == "Euler"
+                        values = rad2deg(values);
+                    end
+                    plot(axesHandle, time, values, LineWidth=1.1, DisplayName=name);
+                end
+                ylabel(axesHandle, componentNames(componentIndex) + " (" + unit + ")");
+                title(axesHandle, componentNames(componentIndex));
+                legend(axesHandle, "Location", "best", "Interpreter", "none");
+            end
+            xlabel(componentAxes(3), "时间 (s)");
+            linkaxes(componentAxes, "x");
+            if fieldName == "Euler"
+                title(layout, "算法解算欧拉角（第1次运行）");
+            else
+                title(layout, "算法解算 ENU 速度（第1次运行）");
+            end
         end
     end
 end
