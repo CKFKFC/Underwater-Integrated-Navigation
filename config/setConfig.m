@@ -18,22 +18,24 @@ cfg.path.outputFolder = fullfile(projectRoot, "data", "output");
 cfg.sim.dt = 0.01;
 
 % Monte Carlo 次数。实测数据模式下会自动改为 1。
-cfg.sim.runs = 10;
+cfg.sim.runs = 1;
 
 % 实际参与算法运行的仿真时长，单位 s。
 % inf 或 [] 表示使用输入 MAT 文件中的完整轨迹；例如设为 360.0 时，
 % 即使输入轨迹为 3600 s，算法、误差计算和绘图也只运行前 360 s。
-cfg.sim.duration = 1000;
+cfg.sim.duration = inf;
 
 %% 数据配置
 % mode = "simulation" 时，输入文件应包含真值和理想传感器数据。
 % mode = "real" 时，输入文件可包含已经带噪的实测传感器数据。
-cfg.data.mode = "simulation"; % "simulation" or "real"
+cfg.data.mode = "real"; % "simulation" or "real"
 % cfg.data.file = fullfile(cfg.path.inputFolder, "trjMeasured10ms_input.mat");    % 模拟操场轨迹
 % cfg.data.file = fullfile(cfg.path.inputFolder, "MEMS-RFU.mat");    %操场MEMS
 % cfg.data.file = fullfile(cfg.path.inputFolder, "Fiber-Optic-RFU.mat");    %操场光纤
+% cfg.data.file = fullfile(cfg.path.inputFolder, "tank_20261004_MEMS.mat"); %水池实验20261004 MEMS数据
+cfg.data.file = fullfile(cfg.path.inputFolder, "tank_20261004_FiberOptic.mat"); %水池实验20261004 光纤数据
 % cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_straight_auv_3600s.mat");   %直线轨迹
-cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_lawnmower_auv_3600s.mat");  %割草机轨迹
+% cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_lawnmower_auv_3600s.mat");  %割草机轨迹
 cfg.data.generateIdealMeasurement = false;
 cfg.data.coordinateFrame = "ENU";
 cfg.data.bodyFrame = "RFU";
@@ -46,14 +48,13 @@ cfg.reference.surfaceAltitude = 0.0;
 
 %% 传感器开关
 cfg.sensor.imu.isEnabled = true;
-cfg.sensor.dvl.isEnabled = true;
+cfg.sensor.dvl.isEnabled = false;
 cfg.sensor.depth.isEnabled = false;
 cfg.sensor.gps.isEnabled = false;
 
 % DVL 量测统一使用 RFU 载体坐标系速度 [right; forward; up]。
 % 从 INS 安装位置指向 DVL 安装位置的固定杆臂，在 INS RFU 三轴下表达，单位 m。
-% DVL 与 INS 三轴仍假设对齐；输入速度应属于 DVL 安装点，不能重复补偿杆臂。
-cfg.sensor.dvl.leverArmBody = [0.7; -0.8; -0.5];
+cfg.sensor.dvl.leverArmBody = [0.155; -0.045; -0.60];
 
 % 可用时间为 N-by-2 矩阵，每行表示 [开始时间, 结束时间]，单位 s。
 cfg.sensor.dvl.availableTime = [0.0, inf];
@@ -105,7 +106,7 @@ cfg.noise.imu.accelStd = cfg.noise.imu.accelNoiseDensity * sqrt(sampleRate);  % 
 
 %% 外部传感器噪声
 % 外部量测噪声为每次量测的 1σ 标准差。
-cfg.noise.dvl.velocityStd = [0.1; 0.1; 0.1]; % 体坐标速度: m/s
+cfg.noise.dvl.velocityStd = [0.0001; 0.0001; 0.0001]; % 体坐标速度: m/s
 cfg.noise.depth.depthStd = 0.10;             % 深度: m
 cfg.noise.gps.positionStd = [1.0; 1.0; 2.0]; % ENU 位置: m
 
@@ -138,11 +139,11 @@ cfg.algorithm.initialPerturbation.accelBiasStd = ...
 % P0 与名义初值扰动独立设置。各字段给出 1 sigma 标准差，状态模型按 profile
 % 顺序拼接后生成 P0=diag(initialCovarianceStd.^2)。姿态项仍是 ENU 小失准角，
 % 不是 [roll; pitch; yaw] 欧拉角标准差。
-cfg.algorithm.initialCovariance.attitudeStdDeg = [0.1; 0.1; 0.5];
+cfg.algorithm.initialCovariance.attitudeStdDeg = [2; 2; 5];
 cfg.algorithm.initialCovariance.velocityStd = [0.1; 0.1; 0.1];        % ENU: m/s
 cfg.algorithm.initialCovariance.positionStd = [1.0; 1.0; 1.0];       % ENU: m
 cfg.algorithm.initialCovariance.gyroBiasStdDegPerHour = ...
-    [1.0; 1.0; 1.0];                                                % RFU: deg/h
+    [1; 1; 1];                                                % RFU: deg/h
 cfg.algorithm.initialCovariance.accelBiasStdMicroG = ...
     [100.0; 100.0; 100.0];                                         % RFU: micro-g
 cfg.algorithm.initialCovariance.attitudeStd = ...

@@ -46,4 +46,6 @@ plotter.plotPositionError();
 plotter.plotVelocityError();
 plotter.plotAttitudeError();
 plotter.plotRmse();
-% plotter.plotPositionComponents();
+plotter.plotPositionComponents();
+plotter.plotAttitude();
+plotter.plotVelocity();
