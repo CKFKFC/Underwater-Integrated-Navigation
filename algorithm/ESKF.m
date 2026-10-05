@@ -99,9 +99,16 @@ for mc = 1:cfg.sim.runs
             %% 使用各外部量测采样时刻的临时导航状态构造新息
             dvl = meas.getDvl(sampleIndex);
             if dvl.Valid
+                % navSol 的姿态仍属于最新已到达 IMU 的采样时刻。非零杆臂时
+                % 将临时 DVL 姿态推到 DVL.SampleTime；角速度保持最新已到达值，
+                % 是短延时的常角速度近似，不读取尚未到达的 IMU。
+                attitudeDeltaTime = 0.0;
+                if any(cfg.sensor.dvl.leverArmBody ~= 0.0)
+                    attitudeDeltaTime = dvl.SampleTime - imu.SampleTime;
+                end
                 dvlNavSol = SensorDelayCompensator.backPropagateVelocity( ...
-                    navSol, correctedImu, dvl.DelaySeconds);
-                fil.UpdateDvl(dvlNavSol, dvl);
+                    navSol, correctedImu, dvl.DelaySeconds, attitudeDeltaTime);
+                fil.UpdateDvl(dvlNavSol, dvl, correctedImu);
             end
 
             depth = meas.getDepth(sampleIndex);
@@ -128,7 +135,7 @@ for mc = 1:cfg.sim.runs
             %% 无延时外部量测更新
             dvl = meas.getDvl(sampleIndex);
             if dvl.Valid
-                fil.UpdateDvl(navSol, dvl);
+                fil.UpdateDvl(navSol, dvl, correctedImu);
             end
 
             depth = meas.getDepth(sampleIndex);

@@ -100,6 +100,10 @@ cfg.RollAmplitudeDeg = 3.0;
 % DVL 体坐标速度输出周期，单位 s。
 cfg.DvlSampleInterval = 0.10;
 
+% 真值杆臂：INS 指向 DVL，在 INS RFU [右; 前; 上] 三轴下表达，单位 m。
+% 与滤波配置 cfg.sensor.dvl.leverArmBody 分别设置，支持模拟标定误差。
+cfg.DvlLeverArmBody = [0.7; -0.8; -0.5];
+
 % 深度计输出周期，单位 s。
 cfg.DepthSampleInterval = 0.10;
 

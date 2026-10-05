@@ -28,6 +28,9 @@ requirePositive(cfg.DepthPeriod, "DepthPeriod");
 requireFinite(cfg.DepthPhaseDeg, "DepthPhaseDeg");
 requireNonnegative(cfg.RollAmplitudeDeg, "RollAmplitudeDeg");
 requirePositive(cfg.DvlSampleInterval, "DvlSampleInterval");
+validateattributes(cfg.DvlLeverArmBody, {'numeric'}, ...
+    {'real', 'finite', 'vector', 'numel', 3}, 'genetraj', 'DvlLeverArmBody');
+cfg.DvlLeverArmBody = double(cfg.DvlLeverArmBody(:));
 requirePositive(cfg.DepthSampleInterval, "DepthSampleInterval");
 requirePositive(cfg.GpsSampleInterval, "GpsSampleInterval");
 

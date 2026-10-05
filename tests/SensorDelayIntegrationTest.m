@@ -124,6 +124,7 @@ classdef SensorDelayIntegrationTest < matlab.unittest.TestCase
             cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input.mat");
             cfg.data.isSensorNoiseMonteCarlo = false;
             cfg.sensor.dvl.isEnabled = true;
+            cfg.sensor.dvl.leverArmBody = zeros(3, 1);
             cfg.sensor.depth.isEnabled = true;
             cfg.sensor.gps.isEnabled = true;
             cfg.sensorDelay.isEnabled = isDelayEnabled;
@@ -138,6 +139,7 @@ classdef SensorDelayIntegrationTest < matlab.unittest.TestCase
 
         function [noDelayRmse, delayRmse] = compareVerticalPositionRmse()
             baseCfg = setConfig();
+            baseCfg.sensor.dvl.leverArmBody = zeros(3, 1);
             baseCfg.sim.duration = 30.0;
             baseCfg.sim.runs = 1;
             baseCfg.data.isSensorNoiseMonteCarlo = false;

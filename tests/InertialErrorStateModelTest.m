@@ -218,6 +218,7 @@ classdef InertialErrorStateModelTest < matlab.unittest.TestCase
         function cfg = createConfig(profileName)
             cfg = setConfig();
             cfg.algorithm.stateModel.profile = profileName;
+            cfg.sensor.dvl.leverArmBody = zeros(3, 1);
         end
 
         function [navSol, correctedImu] = createNavigationInputs()

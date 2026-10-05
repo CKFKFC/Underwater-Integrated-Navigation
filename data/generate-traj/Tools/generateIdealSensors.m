@@ -16,7 +16,8 @@ gpsIndex = makeSensorIndex(numSamples, cfg.SampleInterval, cfg.GpsSampleInterval
 
 % DVL 量测使用 RFU 体坐标系速度，不能直接使用 ENU 速度。
 dvlVelocityBody = createDvlVelocityBody( ...
-    trajectory.VelocityEnu(dvlIndex, :), trajectory.AttitudeCbn(:, :, dvlIndex));
+    trajectory.VelocityEnu(dvlIndex, :), trajectory.AttitudeCbn(:, :, dvlIndex), ...
+    gyro(dvlIndex, :), trajectory.PositionLlh(dvlIndex, :), cfg.DvlLeverArmBody);
 
 % ENU 高度向上为正，深度计深度向下为正。
 depth = cfg.SurfaceAltitude - trajectory.PositionLlh(depthIndex, 3);

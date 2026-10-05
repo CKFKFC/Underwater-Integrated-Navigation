@@ -63,9 +63,15 @@ classdef ErrorStateKF < handle
         end
 
         %% 执行 DVL 量测更新
-        function UpdateDvl(obj, navSol, measurement)
+        function UpdateDvl(obj, navSol, measurement, correctedImu)
             %UPDATEDVL 执行 DVL 速度量测更新。
-            [residual, H, R] = obj.Model_.BuildDvlMeasurement(navSol, measurement);
+            arguments
+                obj
+                navSol struct
+                measurement struct
+                correctedImu struct = struct()
+            end
+            [residual, H, R] = obj.Model_.BuildDvlMeasurement(navSol, measurement, correctedImu);
             obj.KalmanUpdate(residual, H, R);
         end
 
