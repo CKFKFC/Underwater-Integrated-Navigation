@@ -18,12 +18,12 @@ cfg.path.outputFolder = fullfile(projectRoot, "data", "output");
 cfg.sim.dt = 0.01;
 
 % Monte Carlo 次数。实测数据模式下会自动改为 1。
-cfg.sim.runs = 20;
+cfg.sim.runs = 2;
 
 % 实际参与算法运行的仿真时长，单位 s。
 % inf 或 [] 表示使用输入 MAT 文件中的完整轨迹；例如设为 360.0 时，
 % 即使输入轨迹为 3600 s，算法、误差计算和绘图也只运行前 360 s。
-cfg.sim.duration = inf;
+cfg.sim.duration = 1000;
 
 %% 数据配置
 % mode = "simulation" 时，输入文件应包含真值和理想传感器数据。
@@ -46,7 +46,7 @@ cfg.reference.surfaceAltitude = 0.0;
 
 %% 传感器开关
 cfg.sensor.imu.isEnabled = true;
-cfg.sensor.dvl.isEnabled = false;
+cfg.sensor.dvl.isEnabled = true;
 cfg.sensor.depth.isEnabled = false;
 cfg.sensor.gps.isEnabled = false;
 
