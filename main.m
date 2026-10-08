@@ -43,9 +43,14 @@ results.saveToMat();
 plotter = ResultPlotter(cfg, meas, results);
 plotter.plotTrajectory();
 plotter.plotPositionError();
+plotter.plotPositionNees();
+plotter.plotPositionError3Sigma();
 plotter.plotVelocityError();
 plotter.plotAttitudeError();
 plotter.plotRmse();
-plotter.plotPositionComponents();
-plotter.plotAttitude();
-plotter.plotVelocity();
+% plotter.plotPositionComponents();
+% plotter.plotAttitude();
+% plotter.plotVelocity();
+
+% 打印各算法的位置平均 RMSE 和平均 NEES
+plotter.printPositionStatistics();

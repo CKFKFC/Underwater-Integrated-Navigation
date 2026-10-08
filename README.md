@@ -394,9 +394,12 @@ C：与 B 相同的数据/正确杆臂补偿。无噪声试验用精确初值，
 | `Euler` | roll、pitch、yaw，rad |
 | `GyroBias` | RFU 名义陀螺零偏估计，rad/s |
 | `AccelBias` | RFU 名义加速度计零偏估计，m/s² |
+| `PositionCovarianceEnu` | ENU 位置协方差，m²，`3×3×N×runs`，保留轴间相关项 |
 | `StateModel` | 实际 profile、维数、状态块名称、索引及初始标准差等元数据 |
 
 `GyroBias` 和 `AccelBias` 是用于补偿的估计值，并非仿真注入的真实零偏。`ins9` 也保存这两个数组，但值保持为其输入的零偏估计。
+
+位置协方差第一帧取 `P0` 的位置状态块，后续与完成量测更新和闭环反馈的导航结果配对。延时模式下，尚未收到有效 IMU、未执行滤波推进的时刻保留为 `NaN`。
 
 运行 `main` 后，可直接查看第一轮结果与主时间轴：
 
@@ -430,10 +433,17 @@ stateModelInfo = savedResults.resultData.ESKF.StateModel;
 | `AttitudeEuler` | 与 `AttitudeMisalignment` 保存相同数据，名称不代表欧拉角相减 |
 | `PositionComponentRmse` 等 | 每个时刻、每个分量跨 MC 的 RMSE，`N×3` |
 | `PositionRmse` 等 | 每个时刻三轴误差平方和跨 MC 平均后开方，`N×1` |
+| `PositionSigma` | ENU 位置标准差，m，`N×3×runs`，由协方差对角项开方得到 |
+| `PositionNees` | 各次运行的三维位置联合 NEES，无量纲，`N×runs` |
+| `PositionMeanNees` | 每个时刻跨有效 MC 的平均位置 NEES，`N×1` |
 
 例如位置总 RMSE 为 `sqrt(mean(eEast.^2 + eNorth.^2 + eUp.^2, MC维))`。这是随时间变化的统计量，不是对整段时间求平均得到的单个数。只有一次运行时，分量 RMSE 等于该分量误差的绝对值，总 RMSE 等于三维误差模长。
 
 有哪类真值，就计算哪类误差。只有位置真值时，位置指标可用，速度和姿态对应数组为 `NaN`；完全没有真值时，会警告并跳过误差计算，导航结果仍可保存。
+
+位置 NEES 使用每次运行的带符号 ENU 误差与对应的完整位置协方差计算 `e'*(P\e)`，再跨 MC 求平均。其理论期望值为 3，与完整状态是 9 维还是 15 维无关。缺失、非有限或非正定协方差对应的 NEES 为 `NaN`，不会以伪逆或额外正则项替代。
+
+`main` 最后通过 `plotter.printPositionStatistics()` 打印各算法的位置平均 RMSE（m）和位置平均 NEES（无量纲）。`PositionRmse` 已在每个时刻跨 MC 求均方后开方，`PositionMeanNees` 已在每个时刻跨 MC 求平均；打印方法分别对两条曲线沿时间求算术平均，并忽略 `NaN` 样本。没有位置参考的算法跳过打印。
 
 ### 8.3 图窗显示什么
 
@@ -441,9 +451,21 @@ stateModelInfo = savedResults.resultData.ESKF.StateModel;
 - 位置、速度、姿态误差图：分别展示跨 MC 的三轴分量 RMSE，不是某一次的带符号误差曲线。
 - 姿态图：绘图时转换为度；虽然标签写滚转、俯仰、航向失准角，底层数据仍是 ENU 旋转矢量分量。
 - `Position RMSE`：三维位置总 RMSE。
+- `ESKF Position NEES`：单次位置 NEES 或多次 MC 的平均 NEES，以及理论期望值 3。
+- `ESKF Position Error and 3 Sigma`：第 1 次运行的东、北、天带符号位置误差及同一次运行的 ±3σ。
 - 位置分量图：第 1 次 MC 解算位置和真值各自的 ENU 分量，以真值首位置为参考原点；无位置真值时跳过。
 
 这些绘图调用只创建图窗，主程序没有自动保存 PNG 或 FIG 的步骤。需要检查带符号的单轮误差时，应读取 `results.Error.ESKF.PositionEnu(:, :, 1)` 等原始误差数组。
+
+两个新增图窗由 `main` 自动调用，也可单独调用；指定其他运行时，误差和标准差会一起切换：
+
+```matlab
+plotter.plotPositionNees();
+plotter.plotPositionError3Sigma();       % 默认第 1 次运行
+plotter.plotPositionError3Sigma(2);      % 至少有 2 次 MC 时查看第 2 次
+```
+
+新方法支持返回图窗句柄。无位置参考时会警告并跳过；旧 MAT 结果缺少位置协方差历史时，需要重新运行 ESKF。
 
 <a id="faq"></a>
 

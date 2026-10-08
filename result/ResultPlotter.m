@@ -1,8 +1,8 @@
 ﻿classdef ResultPlotter < handle
-    %RESULTPLOTTER 绘制水下导航结果。
+    %RESULTPLOTTER 显示水下导航结果。
     % 作者: Kefan Chen
     % 日期: 2026-07-04
-    % 功能: 绘制轨迹、位置误差和 RMSE。
+    % 功能: 绘制轨迹、位置误差和 RMSE，打印位置统计。
 
     properties (Access = private)
         Cfg
@@ -22,6 +22,26 @@
             obj.Cfg = cfg;
             obj.Meas = meas;
             obj.Results = results;
+        end
+
+        function printPositionStatistics(obj)
+            %PRINTPOSITIONSTATISTICS 打印各算法的位置平均 RMSE（m）和平均 NEES。
+            %   PositionRmse 已在每个时刻跨 MC 求均方后开方；PositionMeanNees
+            %   已在每个时刻跨 MC 求平均。这里再沿时间求算术平均，忽略 NaN。
+            arguments
+                obj ResultPlotter
+            end
+            algorithmNames = fieldnames(obj.Results.Error);
+            for nameIndex = 1:numel(algorithmNames)
+                name = algorithmNames{nameIndex};
+                errorData = obj.Results.Error.(name);
+                if errorData.HasPositionTruth
+                    averagePositionRmse = mean(errorData.PositionRmse, "omitnan");
+                    averagePositionNees = mean(errorData.PositionMeanNees, "omitnan");
+                    fprintf("%s：位置平均 RMSE = %.6f m，位置平均 NEES = %.6f\n", ...
+                        name, averagePositionRmse, averagePositionNees);
+                end
+            end
         end
 
         function plotTrajectory(obj)
@@ -153,6 +173,92 @@
             end
         end
 
+        function plotFigure = plotPositionNees(obj)
+            %PLOTPOSITIONNEES 绘制 ESKF 三维位置 NEES 和理论期望值 3。
+            %   多次运行时绘制逐次 NEES 的 MC 平均，不对误差或协方差先求平均。
+            arguments
+                obj ResultPlotter
+            end
+            plotFigure = gobjects(0);
+            errorData = obj.getEskfPositionErrors();
+            if isempty(fieldnames(errorData))
+                return;
+            end
+            if ~any(isfinite(errorData.PositionMeanNees))
+                warning("ResultPlotter:PositionNeesUnavailable", ...
+                    "No valid position NEES is available. Check position errors and positive definite covariance.");
+                return;
+            end
+
+            curveName = "ESKF";
+            if size(errorData.PositionNees, 2) > 1
+                curveName = "ESKF (MC平均)";
+            end
+            time = obj.Meas.getTime();
+            positionDimension = size(errorData.PositionEnu, 2);
+            plotFigure = figure(Name="ESKF Position NEES");
+            axesHandle = axes(plotFigure);
+            hold(axesHandle, "on");
+            grid(axesHandle, "on");
+            plot(axesHandle, time, errorData.PositionMeanNees, LineWidth=1.2, DisplayName=curveName);
+            yline(axesHandle, positionDimension, "k--", LineWidth=1.2, ...
+                DisplayName="理论期望值 = " + string(positionDimension));
+            xlabel(axesHandle, "时间 (s)");
+            ylabel(axesHandle, "位置 NEES");
+            title(axesHandle, "ESKF 三维位置联合 NEES");
+            legend(axesHandle, "Location", "best", "Interpreter", "none");
+        end
+
+        function plotFigure = plotPositionError3Sigma(obj, mcIndex)
+            %PLOTPOSITIONERROR3SIGMA 绘制指定运行的 ENU 位置误差与对应的正负 3 sigma。
+            %   默认绘制第 1 次运行；mcIndex 可选择其他 Monte Carlo 运行。
+            arguments
+                obj ResultPlotter
+                mcIndex (1, 1) double {mustBeFinite, mustBeInteger, mustBePositive} = 1
+            end
+            plotFigure = gobjects(0);
+            errorData = obj.getEskfPositionErrors();
+            if isempty(fieldnames(errorData))
+                return;
+            end
+            runs = size(errorData.PositionEnu, 3);
+            if mcIndex > runs
+                error("ResultPlotter:InvalidMonteCarloIndex", ...
+                    "mcIndex must be between 1 and %d, the number of stored ESKF runs.", runs);
+            end
+
+            positionError = errorData.PositionEnu(:, :, mcIndex);
+            threeSigma = 3.0 * errorData.PositionSigma(:, :, mcIndex);
+            if ~any(isfinite(positionError) & isfinite(threeSigma), "all")
+                warning("ResultPlotter:PositionSigmaUnavailable", ...
+                    "No matching position errors and standard deviations are available for run %d.", mcIndex);
+                return;
+            end
+
+            time = obj.Meas.getTime();
+            componentNames = ["东向", "北向", "天向"];
+            plotFigure = figure(Name="ESKF Position Error and 3 Sigma");
+            layout = tiledlayout(plotFigure, 3, 1);
+            componentAxes = gobjects(3, 1);
+            for componentIndex = 1:3
+                componentAxes(componentIndex) = nexttile(layout);
+                axesHandle = componentAxes(componentIndex);
+                hold(axesHandle, "on");
+                grid(axesHandle, "on");
+                plot(axesHandle, time, positionError(:, componentIndex), ...
+                    "b-", LineWidth=1.1, DisplayName="ESKF");
+                plot(axesHandle, time, threeSigma(:, componentIndex), ...
+                    "r--", LineWidth=1.1, DisplayName="+3σ");
+                plot(axesHandle, time, -threeSigma(:, componentIndex), ...
+                    "r--", LineWidth=1.1, DisplayName="-3σ");
+                ylabel(axesHandle, componentNames(componentIndex) + "位置误差 (m)");
+                legend(axesHandle, "Location", "best", "Interpreter", "none");
+            end
+            xlabel(componentAxes(3), "时间 (s)");
+            linkaxes(componentAxes, "x");
+            title(layout, "ESKF 位置误差与 ±3σ（第 " + string(mcIndex) + " 次运行）");
+        end
+
         function plotAttitudeError(obj)
             %PLOTATTITUDEERROR 绘制姿态小失准角误差的 MC 平均 RMSE。
             if ~obj.Meas.hasAttitudeTruth()
@@ -279,6 +385,32 @@
     end
 
     methods (Access = private)
+        function errorData = getEskfPositionErrors(obj)
+            %GETESKFPOSITIONERRORS 检查 ESKF 位置误差与一致性指标是否可用。
+            errorData = struct();
+            if ~isfield(obj.Results.Data, "ESKF")
+                return;
+            end
+            if ~obj.Meas.hasPositionTruth()
+                warning("ResultPlotter:PositionTruthUnavailable", ...
+                    "Position truth is unavailable. ESKF position consistency plots are not created.");
+                return;
+            end
+            if ~isfield(obj.Results.Data.ESKF, "PositionCovarianceEnu")
+                warning("ResultPlotter:MissingPositionCovariance", ...
+                    "ESKF position covariance history is missing. Rerun ESKF to create consistency plots.");
+                return;
+            end
+            requiredFields = ["PositionEnu", "PositionSigma", "PositionNees", "PositionMeanNees"];
+            if ~isfield(obj.Results.Error, "ESKF") ...
+                    || ~all(isfield(obj.Results.Error.ESKF, requiredFields))
+                warning("ResultPlotter:PositionConsistencyUnavailable", ...
+                    "Run results.computeErrors(meas) before plotting ESKF position consistency.");
+                return;
+            end
+            errorData = obj.Results.Error.ESKF;
+        end
+
         function plotNavigationComponents(obj, fieldName, componentNames, unit, figureName)
             %PLOTNAVIGATIONCOMPONENTS 绘制解算值，不依赖真值是否存在。
             algorithmNames = fieldnames(obj.Results.Data);

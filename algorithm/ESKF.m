@@ -14,6 +14,7 @@ algorithmName = "ESKF";
 % stateModel 是本次运行的状态模型唯一来源。ESKF 主流程不判断 9/15 维，
 % 只把导航状态交给模型构造矩阵，并把模型元数据随结果保存用于复现实验。
 stateModel = InertialErrorStateModel(cfg);
+positionIndex = stateModel.Layout.Index.Position;
 time = meas.getTime();
 numSamples = meas.getNumSamples();
 isDelayEnabled = isfield(cfg, "sensorDelay") ...
@@ -41,12 +42,14 @@ for mc = 1:cfg.sim.runs
     eulerHistory = nan(3, numSamples);
     gyroBiasHistory = nan(3, numSamples);
     accelBiasHistory = nan(3, numSamples);
+    positionCovarianceHistory = nan(3, 3, numSamples);
 
     positionHistory(:, 1) = navSol.PositionLlh(:);
     velocityHistory(:, 1) = navSol.VelocityEnu(:);
     eulerHistory(:, 1) = eulerFromDcm(navSol.Cbn);
     gyroBiasHistory(:, 1) = imuBias.GyroBias(:);
     accelBiasHistory(:, 1) = imuBias.AccelBias(:);
+    positionCovarianceHistory(:, :, 1) = initialP(positionIndex, positionIndex);
 
     for sampleIndex = 2:numSamples
         if mod(sampleIndex - 1, progressStepCount) == 0
@@ -63,6 +66,7 @@ for mc = 1:cfg.sim.runs
             %% 延时 IMU 解算与一阶前向补偿
             imu = meas.getImu(sampleIndex);
             if ~imu.Valid
+                % 未推进滤波的时刻不保存旧协方差，位置一致性指标保持 NaN。
                 positionHistory(:, sampleIndex) = navSol.PositionLlh(:);
                 velocityHistory(:, sampleIndex) = navSol.VelocityEnu(:);
                 eulerHistory(:, sampleIndex) = eulerFromDcm(navSol.Cbn);
@@ -171,6 +175,8 @@ for mc = 1:cfg.sim.runs
         eulerHistory(:, sampleIndex) = eulerFromDcm(navSol.Cbn);
         gyroBiasHistory(:, sampleIndex) = imuBias.GyroBias(:);
         accelBiasHistory(:, sampleIndex) = imuBias.AccelBias(:);
+        covariance = fil.GetCovariance();
+        positionCovarianceHistory(:, :, sampleIndex) = covariance(positionIndex, positionIndex);
     end
 
     results.Data.(algorithmName).PositionLlh(:, :, mc) = positionHistory.';
@@ -178,6 +184,7 @@ for mc = 1:cfg.sim.runs
     results.Data.(algorithmName).Euler(:, :, mc) = eulerHistory.';
     results.Data.(algorithmName).GyroBias(:, :, mc) = gyroBiasHistory.';
     results.Data.(algorithmName).AccelBias(:, :, mc) = accelBiasHistory.';
+    results.Data.(algorithmName).PositionCovarianceEnu(:, :, :, mc) = positionCovarianceHistory;
 end
 
 end

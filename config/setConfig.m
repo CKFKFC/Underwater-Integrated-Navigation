@@ -23,7 +23,7 @@ cfg.sim.runs = 1;
 % 实际参与算法运行的仿真时长，单位 s。
 % inf 或 [] 表示使用输入 MAT 文件中的完整轨迹；例如设为 360.0 时，
 % 即使输入轨迹为 3600 s，算法、误差计算和绘图也只运行前 360 s。
-cfg.sim.duration = 3600;
+cfg.sim.duration = inf;
 
 %% 数据配置
 % mode = "simulation" 时，输入文件应包含真值和理想传感器数据。

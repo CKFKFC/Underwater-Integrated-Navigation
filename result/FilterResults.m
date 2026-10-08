@@ -43,6 +43,7 @@
             result.Euler = nan(numSamples, 3, runs);
             result.GyroBias = nan(numSamples, 3, runs);
             result.AccelBias = nan(numSamples, 3, runs);
+            result.PositionCovarianceEnu = nan(3, 3, numSamples, runs);
             obj.Data.(name) = result;
         end
 
@@ -124,6 +125,9 @@
                 errorData.VelocityComponentRmse = obj.computeComponentRmse(velocityError);
                 errorData.AttitudeComponentRmse = obj.computeComponentRmse(attitudeError);
                 errorData.PositionRmse = sqrt(mean(sum(positionError.^2, 2), 3, "omitnan"));
+                [errorData.PositionSigma, errorData.PositionNees] = ...
+                    obj.computePositionConsistency(result, positionError);
+                errorData.PositionMeanNees = mean(errorData.PositionNees, 2, "omitnan");
                 errorData.VelocityRmse = sqrt(mean(sum(velocityError.^2, 2), 3, "omitnan"));
                 errorData.AttitudeRmse = sqrt(mean(sum(attitudeError.^2, 2), 3, "omitnan"));
                 obj.Error.(name) = errorData;
@@ -147,6 +151,53 @@
     end
 
     methods (Access = private)
+        %% 计算位置标准差与每次运行的三维联合 NEES
+        function [positionSigma, positionNees] = computePositionConsistency(~, result, positionError)
+            %COMPUTEPOSITIONCONSISTENCY 使用同一时刻、同一次运行的 ENU 位置协方差。
+            %   Sigma 由非负对角方差计算；NEES 使用完整的正定 3-by-3 协方差。
+            %   缺失、非有限或非正定协方差对应的 NEES 保留为 NaN。
+            [numSamples, ~, runs] = size(positionError);
+            positionSigma = nan(numSamples, 3, runs);
+            positionNees = nan(numSamples, runs);
+            if ~isfield(result, "PositionCovarianceEnu")
+                return;
+            end
+
+            covarianceHistory = result.PositionCovarianceEnu;
+            if ~isnumeric(covarianceHistory) || ~isreal(covarianceHistory) ...
+                    || ndims(covarianceHistory) > 4 ...
+                    || ~isequal(size(covarianceHistory, [1, 2, 3, 4]), [3, 3, numSamples, runs])
+                error("FilterResults:InvalidPositionCovariance", ...
+                    "PositionCovarianceEnu must be a real 3-by-3-by-N-by-runs numeric array.");
+            end
+
+            for mc = 1:runs
+                for sampleIndex = 1:numSamples
+                    covariance = covarianceHistory(:, :, sampleIndex, mc);
+                    if any(~isfinite(covariance), "all")
+                        continue;
+                    end
+                    covariance = 0.5 * (covariance + covariance.');
+                    variance = diag(covariance);
+                    if any(variance < 0.0)
+                        continue;
+                    end
+                    positionSigma(sampleIndex, :, mc) = sqrt(variance).';
+
+                    errorEnu = positionError(sampleIndex, :, mc).';
+                    if any(~isfinite(errorEnu))
+                        continue;
+                    end
+                    [lowerFactor, status] = chol(covariance, "lower");
+                    if status == 0
+                        % e'*(P\e) = ||L\e||^2，保留轴间相关性且不显式求逆。
+                        normalizedError = lowerFactor\errorEnu;
+                        positionNees(sampleIndex, mc) = sum(normalizedError.^2);
+                    end
+                end
+            end
+        end
+
         %% 计算估计姿态相对真值的失准角
         function attitudeError = computeAttitudeMisalignment(~, estimateCbn, truthCbn)
             %COMPUTEATTITUDEMISALIGNMENT 计算估计姿态相对真值姿态的小失准角。
