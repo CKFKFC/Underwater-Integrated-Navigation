@@ -21,6 +21,9 @@ requireFinite(cfg.CourseDeg, "CourseDeg");
 requirePositive(cfg.LawnmowerLegLength, "LawnmowerLegLength");
 requirePositive(cfg.LawnmowerLaneSpacing, "LawnmowerLaneSpacing");
 requirePositive(cfg.LawnmowerTurnRadius, "LawnmowerTurnRadius");
+requirePositive(cfg.RectangleLength, "RectangleLength");
+requirePositive(cfg.RectangleWidth, "RectangleWidth");
+requirePositive(cfg.RectangleTurnDuration, "RectangleTurnDuration");
 requireNonnegative(cfg.LateralAmplitude, "LateralAmplitude");
 requirePositive(cfg.LateralPeriod, "LateralPeriod");
 requireNonnegative(cfg.DepthAmplitude, "DepthAmplitude");
@@ -41,7 +44,7 @@ if abs(cfg.InitialLatitudeDeg) >= 89.0
 end
 
 % 水平轨迹类型必须与 generateHorizontalMotion 中的分支保持一致。
-validTrajectoryTypes = ["figure8", "circle", "straight", "lawnmower", "sCurve"];
+validTrajectoryTypes = ["figure8", "circle", "straight", "lawnmower", "rectangle", "sCurve"];
 if ~any(strcmpi(cfg.TrajectoryType, validTrajectoryTypes))
     error("genetraj:InvalidTrajectoryType", ...
         "TrajectoryType must be one of: %s.", strjoin(validTrajectoryTypes, ", "));
@@ -67,6 +70,12 @@ if strcmpi(cfg.TrajectoryType, "lawnmower") ...
         "LawnmowerLaneSpacing must be at least 2 * LawnmowerTurnRadius.");
 end
 
+% 长方形定深且保持水平：直边沿前向运动，顶点只调整航向。
+if strcmpi(cfg.TrajectoryType, "rectangle")
+    cfg.DepthMotionType = "constant";
+    cfg.RollAmplitudeDeg = 0.0;
+end
+
 end
 
 function requireScalar(value, fieldName)
@@ -78,8 +87,8 @@ end
 
 function requireFinite(value, fieldName)
 %REQUIREFINITE 要求参数为有限数值标量。
-if ~isscalar(value) || ~isnumeric(value) || ~isfinite(value)
-    error("genetraj:InvalidOption", "%s must be a finite numeric scalar.", fieldName);
+if ~isscalar(value) || ~isnumeric(value) || ~isreal(value) || ~isfinite(value)
+    error("genetraj:InvalidOption", "%s must be a finite real numeric scalar.", fieldName);
 end
 end
 

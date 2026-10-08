@@ -3,7 +3,8 @@ function trajectory = generateTrajectoryShape(time, cfg)
 %   局部 ENU 只用于轨迹设计和可视化；最终滤波输入使用 PositionLlh。
 
 % 水平轨迹和垂向轨迹分开生成，最后合成为完整 ENU 位置和速度。
-[horizontalPosition, horizontalVelocity, horizontalInfo] = generateHorizontalMotion(time, cfg);
+[horizontalPosition, horizontalVelocity, horizontalInfo, horizontalHeading] = ...
+    generateHorizontalMotion(time, cfg);
 [upPosition, upVelocity, depthInfo] = generateDepthMotion(time, cfg);
 
 positionEnu = [
@@ -28,7 +29,7 @@ for sampleIndex = 1:numel(time)
 end
 
 % 姿态先用欧拉角描述，再转换为体坐标到导航坐标的 DCM。
-attitudeEuler = createAttitudeEuler(time, velocityEnu, cfg);
+attitudeEuler = createAttitudeEuler(time, velocityEnu, cfg, horizontalHeading);
 attitudeCbn = zeros(3, 3, numel(time));
 for sampleIndex = 1:numel(time)
     attitudeCbn(:, :, sampleIndex) = dcmFromEulerLocal(attitudeEuler(sampleIndex, :).');

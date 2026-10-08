@@ -1,9 +1,11 @@
-function [position, velocity, info] = generateHorizontalMotion(time, cfg)
+function [position, velocity, info, heading] = generateHorizontalMotion(time, cfg)
 %GENERATEHORIZONTALMOTION 生成局部 ENU 坐标下的水平轨迹。
 %   position 和 velocity 分别包含 east/north 位置与速度分量，单位为 m 和 m/s。
+%   heading 为可选的北零顺时针航向（rad）；空值表示由速度方向生成航向。
 
 % 轨迹类型统一从 cfg.TrajectoryType 读取；外部只需要调用 genetraj。
 trajectoryType = lower(string(cfg.TrajectoryType));
+heading = zeros(0, 1);
 switch trajectoryType
     case "figure8"
         [position, velocity] = createFigure8Motion(time, cfg);
@@ -17,6 +19,9 @@ switch trajectoryType
     case "lawnmower"
         [position, velocity] = createLawnmowerMotion(time, cfg);
         description = "lawnmower AUV survey pattern";
+    case "rectangle"
+        [position, velocity, heading, isTurning] = createRectangleMotion(time, cfg);
+        description = "constant-depth rectangle with in-place heading changes";
     case "scurve"
         [position, velocity] = createSCurveMotion(time, cfg);
         description = "sinusoidal lateral s-curve";
@@ -37,6 +42,13 @@ if trajectoryType == "lawnmower"
     info.TurnRadius = cfg.LawnmowerTurnRadius;
     info.TurnConnectorLength = cfg.LawnmowerLaneSpacing ...
         - 2.0 * cfg.LawnmowerTurnRadius;
+elseif trajectoryType == "rectangle"
+    info.Length = cfg.RectangleLength;
+    info.Width = cfg.RectangleWidth;
+    info.TurnDuration = cfg.RectangleTurnDuration;
+    info.Perimeter = 2.0*(cfg.RectangleLength + cfg.RectangleWidth);
+    info.CycleDuration = info.Perimeter/cfg.StraightSpeed + 4.0*cfg.RectangleTurnDuration;
+    info.IsTurning = isTurning;
 end
 
 end
@@ -200,6 +212,58 @@ heading = heading + yawRate * stepTime;
 turnAngle = turnAngle + abs(yawRate) * stepTime;
 dtRemaining = dtRemaining - stepTime;
 isDone = turnAngle >= targetTurnAngle - 1.0e-10;
+
+end
+
+function [position, velocity, heading, isTurning] = createRectangleMotion(time, cfg)
+%CREATERECTANGLEMOTION 沿长方形四边前进，在顶点停止平移并原地右转 90 deg。
+
+legLengths = [cfg.RectangleLength, cfg.RectangleWidth, ...
+    cfg.RectangleLength, cfg.RectangleWidth];
+legDurations = legLengths/cfg.StraightSpeed;
+sideEnds = cumsum(legDurations + cfg.RectangleTurnDuration);
+cycleTime = mod(time, sideEnds(end));
+completedCycles = floor(time/sideEnds(end));
+course = deg2rad(cfg.CourseDeg);
+
+position = zeros(numel(time), 2);
+velocity = zeros(numel(time), 2);
+heading = course + 2.0*pi*completedCycles;
+isTurning = false(size(time));
+sideStart = 0.0;
+startPosition = [0.0, 0.0];
+directions = [0.0, 1.0; 1.0, 0.0; 0.0, -1.0; -1.0, 0.0];
+
+% 按各段持续时间解析求值，停车转向期间位置保持在同一个顶点。
+for sideIndex = 1:4
+    forward = directions(sideIndex, :);
+    onSide = (cycleTime >= sideStart) & (cycleTime < sideEnds(sideIndex));
+    sideTime = cycleTime - sideStart;
+    onLeg = onSide & (sideTime < legDurations(sideIndex));
+    onTurn = onSide & ~onLeg;
+
+    position(onLeg, :) = startPosition + cfg.StraightSpeed*sideTime(onLeg).*forward;
+    velocity(onLeg, 1) = cfg.StraightSpeed*forward(1);
+    velocity(onLeg, 2) = cfg.StraightSpeed*forward(2);
+
+    vertex = startPosition + legLengths(sideIndex)*forward;
+    position(onTurn, 1) = vertex(1);
+    position(onTurn, 2) = vertex(2);
+    heading(onSide) = heading(onSide) + (sideIndex-1)*pi/2.0;
+
+    % 航向独立于平移速度，避免零速度时 atan2(0, 0) 把航向重置为北向。
+    turnFraction = (sideTime(onTurn)-legDurations(sideIndex))/cfg.RectangleTurnDuration;
+    heading(onTurn) = heading(onTurn) + (pi/2.0)*turnFraction;
+    isTurning(onTurn) = true;
+
+    startPosition = vertex;
+    sideStart = sideEnds(sideIndex);
+end
+
+% CourseDeg 旋转整个长方形，使第一条长边沿指定航向。
+rotation = [cos(course), -sin(course); sin(course), cos(course)];
+position = position*rotation;
+velocity = velocity*rotation;
 
 end
 

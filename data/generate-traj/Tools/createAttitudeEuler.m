@@ -1,10 +1,15 @@
-function attitudeEuler = createAttitudeEuler(time, velocityEnu, cfg)
+function attitudeEuler = createAttitudeEuler(time, velocityEnu, cfg, heading)
 %CREATEATTITUDEEULER 由速度方向生成 RFU [roll, pitch, yaw] 姿态真值。
 %   yaw 北向为零、顺时针为正；pitch 抬头为正；roll 右侧下沉为正。
+%   可选 heading 指定各时刻的航向（rad），支持零平移速度下的原地转向。
 
 % 航向角由水平速度方向给出；atan2(east, north) 表示北零顺时针航向。
 horizontalSpeed = hypot(velocityEnu(:, 1), velocityEnu(:, 2));
-yaw = unwrap(atan2(velocityEnu(:, 1), velocityEnu(:, 2)));
+if nargin < 4 || isempty(heading)
+    yaw = unwrap(atan2(velocityEnu(:, 1), velocityEnu(:, 2)));
+else
+    yaw = heading;
+end
 
 % 俯仰角由垂向速度和水平速度给出，向上速度对应正俯仰。
 pitch = atan2(velocityEnu(:, 3), max(horizontalSpeed, eps));

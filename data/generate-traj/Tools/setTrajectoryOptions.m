@@ -6,7 +6,7 @@ function cfg = setTrajectoryOptions()
 %       genetraj()
 %
 %   切换水平轨迹时，修改 cfg.TrajectoryType：
-%       "straight", "lawnmower", "figure8", "circle", 或 "sCurve"。
+%       "straight", "lawnmower", "rectangle", "figure8", "circle", 或 "sCurve"。
 %
 %   坐标和符号约定：
 %   - 水平轨迹先在局部 ENU 坐标中设计，单位 m。
@@ -19,14 +19,14 @@ cfg = struct();
 
 %% 输出文件
 % OutputFile 为空时，默认保存到 data/input/navigation_input.mat。
-cfg.OutputFile = "";
+cfg.OutputFile = "data/input/navigation_input_rectangle_360s.mat";
 
 % 设为 false 时只返回 inputData，不写 MAT 文件，适合调试和单元测试。
 cfg.SaveToFile = true;
 
 %% 时间设置
 % 轨迹总时长，单位 s。参考工程的直线和割草机轨迹均采用约 3600 s。
-cfg.Duration = 3600.0;
+cfg.Duration = 360.0;
 
 % 主采样周期，也是 IMU 采样周期，单位 s。
 % 建议与 setConfig.m 中的 cfg.sim.dt 保持一致。
@@ -34,8 +34,8 @@ cfg.SampleInterval = 0.01;
 
 %% 初始地理位置
 % 初始纬度和经度，单位 deg。这里沿用参考工程附近的初始位置。
-cfg.InitialLatitudeDeg = 34.246048;
-cfg.InitialLongitudeDeg = 108.909664;
+cfg.InitialLatitudeDeg = 45.246048;
+cfg.InitialLongitudeDeg = 126.909664;
 
 % 初始深度，向下为正，单位 m。
 cfg.InitialDepth = 30.0;
@@ -47,10 +47,11 @@ cfg.SurfaceAltitude = 0.0;
 % 支持的 TrajectoryType：
 % "straight"  : 直线匀速 AUV 运动。
 % "lawnmower" : 割草机测线轨迹，包含 180 deg 掉头。
+% "rectangle" : 定深长方形轨迹，在四个顶点停车并原地右转 90 deg。
 % "figure8"   : 8 字形运动，适合提供多方向激励。
 % "circle"    : 圆形运动，适合稳定转弯测试。
 % "sCurve"    : 正弦横向摆动曲线。
-cfg.TrajectoryType = "straight";
+cfg.TrajectoryType = "rectangle";
 
 % figure8/circle 的水平尺度，单位 m。
 cfg.HorizontalRadius = 70.0;
@@ -58,10 +59,11 @@ cfg.HorizontalRadius = 70.0;
 % figure8/circle 的主要机动周期，单位 s。
 cfg.HorizontalPeriod = 180.0;
 
-% straight/sCurve/lawnmower 的前进速度，单位 m/s。
+% straight/sCurve/lawnmower/rectangle 的前进速度，单位 m/s。
 cfg.StraightSpeed = 1.0;
 
-% straight 直线航向角，单位 deg。0 deg 表示向北，90 deg 表示向东。
+% straight 航向或 rectangle 第一条长边的航向，单位 deg。
+% 0 deg 表示向北，90 deg 表示向东。
 cfg.CourseDeg = 0.0;
 
 % lawnmower 割草机轨迹几何参数，单位 m。
@@ -70,6 +72,14 @@ cfg.CourseDeg = 0.0;
 cfg.LawnmowerLegLength = 450.0;
 cfg.LawnmowerLaneSpacing = 50.0;
 cfg.LawnmowerTurnRadius = 25.0;
+
+% rectangle 的四条直边使用完整长度和宽度，单位 m。
+% 从原点沿 CourseDeg 出发，顺时针循环；固定 InitialDepth，滚转和俯仰均为 0。
+cfg.RectangleLength = 4.0;
+cfg.RectangleWidth = 4.0;
+
+% 每个顶点原地转向 90 deg 的持续时间，单位 s；转向期间平移速度为 0。
+cfg.RectangleTurnDuration = 5.0;
 
 % sCurve 的横向摆动幅值和周期。
 cfg.LateralAmplitude = 30.0;
@@ -102,7 +112,7 @@ cfg.DvlSampleInterval = 0.10;
 
 % 真值杆臂：INS 指向 DVL，在 INS RFU [右; 前; 上] 三轴下表达，单位 m。
 % 与滤波配置 cfg.sensor.dvl.leverArmBody 分别设置，支持模拟标定误差。
-cfg.DvlLeverArmBody = [0.7; -0.8; -0.5];
+cfg.DvlLeverArmBody = [0.0; -0.0; -0.0];
 
 % 深度计输出周期，单位 s。
 cfg.DepthSampleInterval = 0.10;

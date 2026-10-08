@@ -4,7 +4,7 @@ function [inputData, outputFile, trajectoryInfo] = genetraj(varargin)
 %   应优先扩展 cfg.TrajectoryType 对应的内部生成逻辑，而不是新建入口函数。
 %
 %   水平轨迹类型由 cfg.TrajectoryType 选择：
-%   "straight", "lawnmower", "figure8", "circle", 或 "sCurve"。
+%   "straight", "lawnmower", "rectangle", "figure8", "circle", 或 "sCurve"。
 %
 %   默认用法：
 %       genetraj()
@@ -16,6 +16,13 @@ function [inputData, outputFile, trajectoryInfo] = genetraj(varargin)
 %   生成 3600 s 割草机 AUV 轨迹：
 %       genetraj("TrajectoryType", "lawnmower", ...
 %           "OutputFile", "data/input/navigation_input_lawnmower_auv_3600s.mat")
+%
+%   生成定深长方形轨迹（直边前进，到顶点停车并原地右转 90 deg）：
+%       genetraj("TrajectoryType", "rectangle", ...
+%           "RectangleLength", 450.0, "RectangleWidth", 200.0, ...
+%           "RectangleTurnDuration", 5.0, ...
+%           "OutputFile", "data/input/navigation_input_rectangle_3600s.mat")
+%   rectangle 固定深度为 InitialDepth，不叠加 DepthMotionType 或滚转激励。
 %
 %   重复实验建议修改 setTrajectoryOptions.m，或传入 cfg 结构体覆盖默认设置：
 %       cfg = setTrajectoryOptions();

@@ -35,7 +35,9 @@ cfg.data.mode = "simulation"; % "simulation" or "real"
 % cfg.data.file = fullfile(cfg.path.inputFolder, "tank_20261004_MEMS.mat"); %水池实验20261004 MEMS数据
 % cfg.data.file = fullfile(cfg.path.inputFolder, "tank_20261004_FiberOptic.mat"); %水池实验20261004 光纤数据
 % cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_straight_auv_3600s.mat");   %直线轨迹
-cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_lawnmower_auv_3600s.mat");  %割草机轨迹
+% cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_lawnmower_auv_3600s.mat");  %割草机轨迹
+cfg.data.file = fullfile(cfg.path.inputFolder, "navigation_input_rectangle_360s.mat");  %长方形轨迹
+
 cfg.data.generateIdealMeasurement = false;
 cfg.data.coordinateFrame = "ENU";
 cfg.data.bodyFrame = "RFU";
@@ -56,7 +58,7 @@ cfg.sensor.gps.isEnabled = false;
 % 从 INS 安装位置指向 DVL 安装位置的固定杆臂，在 INS RFU 三轴下表达，单位 m。
 
 % cfg.sensor.dvl.leverArmBody = [0.155; -0.045; -0.42];     % 无人船导航箱光纤惯导与DVL杆臂参数
-cfg.sensor.dvl.leverArmBody = [0.7; -0.8; -0.5];            % 仿真数据杆臂参数
+cfg.sensor.dvl.leverArmBody = [0.0; -0.0; -0.0];            % 仿真数据杆臂参数
 
 % 可用时间为 N-by-2 矩阵，每行表示 [开始时间, 结束时间]，单位 s。
 cfg.sensor.dvl.availableTime = [0.0, inf];

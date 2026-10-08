@@ -118,7 +118,23 @@ genetraj(TrajectoryType="lawnmower", Duration=3600.0, SampleInterval=0.01, ...
 
 生成后同样需要在 `setConfig.m` 中切换输入文件。更换轨迹参数后，要重新调用 `genetraj` 才会更新 MAT 内容；仅修改轨迹配置不会改变已经生成的数据。
 
-轨迹入口为 `data/generate-traj/genetraj.m`，默认选项在 `data/generate-traj/Tools/setTrajectoryOptions.m`。水平轨迹支持 `straight`、`lawnmower`、`figure8`、`circle`、`sCurve`；深度运动支持 `auvHeave`、`sine`、`constant`、`diveClimb`。主采样周期和水面参考高度应分别与导航配置中的 `cfg.sim.dt`、`cfg.reference.surfaceAltitude` 一致。
+也可以生成定深长方形轨迹：
+
+```matlab
+genetraj(TrajectoryType="rectangle", Duration=3600.0, ...
+    RectangleLength=450.0, RectangleWidth=200.0, RectangleTurnDuration=5.0, ...
+    StraightSpeed=1.0, CourseDeg=0.0, ...
+    OutputFile="data/input/navigation_input_rectangle_3600s.mat");
+```
+
+`RectangleLength`、`RectangleWidth` 为完整直边的长度和宽度（m），均须为正数。
+从原点沿 `CourseDeg` 指定的航向出发，走完一条直边后在顶点停车、原地右转 90°，再走下一条边。
+`RectangleTurnDuration` 为每次原地转向的持续时间（s），须为正数；转向时位置不变、平移速度为零。
+该类型固定深度为 `InitialDepth`，关闭升沉和滚转激励，使直边只有 RFU 体坐标的前向速度。
+原地转向由独立的航向真值驱动，IMU 输出对应角速度；无需设置 DVL 杆臂。
+`trajectoryInfo.horizontalInfo.IsTurning` 标记各主采样时刻是否处于原地转向阶段。
+
+轨迹入口为 `data/generate-traj/genetraj.m`，默认选项在 `data/generate-traj/Tools/setTrajectoryOptions.m`。水平轨迹支持 `straight`、`lawnmower`、`rectangle`、`figure8`、`circle`、`sCurve`；深度运动支持 `auvHeave`、`sine`、`constant`、`diveClimb`（`rectangle` 始终定深）。主采样周期和水面参考高度应分别与导航配置中的 `cfg.sim.dt`、`cfg.reference.surfaceAltitude` 一致。
 
 生成器按“时间轴 → 真值轨迹 → 理想传感器 → `inputData`”组织数据。`main.m` 不负责生成轨迹；`cfg.data.generateIdealMeasurement = true` 只会再次检查输入完整性，不会补造缺失量测。
 
